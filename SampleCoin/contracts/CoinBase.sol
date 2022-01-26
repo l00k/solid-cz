@@ -2,6 +2,7 @@
 pragma solidity ^0.8.0;
 
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 
 
 error WrongAmount(uint256 amount);
@@ -9,11 +10,14 @@ error AmountExceedAllowed(uint256 required, uint256 allowed);
 error InsufficientFunds(uint256 required, uint256 owned);
 
 
-contract CoinBase is IERC20
+contract CoinBase is
+    IERC20,
+    IERC20Metadata
 {
 
     string private _name;
     string private _symbol;
+    uint8 private _decimals;
 
     uint256 internal _totalSupply;
 
@@ -26,11 +30,13 @@ contract CoinBase is IERC20
     constructor(
         string memory name_,
         string memory symbol_,
-        uint256 initialSupply_
+        uint256 initialSupply_,
+        uint8 decimals_
     ) {
         _name = name_;
         _symbol = symbol_;
         _totalSupply = initialSupply_;
+        _decimals = decimals_;
 
         // entire supply on creator address
         _balances[msg.sender] = initialSupply_;
@@ -44,6 +50,11 @@ contract CoinBase is IERC20
     function symbol() external view returns (string memory)
     {
         return _symbol;
+    }
+
+    function decimals() external view returns (uint8)
+    {
+        return _decimals;
     }
 
     function totalSupply() override external view returns (uint256)

@@ -8,7 +8,7 @@ import {CoinMarket} from "./CoinMarket.sol";
 
 
 contract SampleCoin is
-    CoinBase("SampleCoin", "$", 1000000),
+    CoinBase("SampleCoin", "$", 1000000, 3),
     Mintable,
     Lockable,
     CoinMarket(0.01 ether)
