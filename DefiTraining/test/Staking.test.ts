@@ -1,13 +1,11 @@
 import { Coin } from '@/Coin';
-import { RewardPoolCreatedEvent, Staking, TokenStakedEvent } from '@/Staking';
+import { RewardPoolCreatedEvent, RewardStruct, Staking, TokenStakedEvent } from '@/Staking';
 import { expect } from 'chai';
 import { BigNumber, BigNumberish } from 'ethers';
 import { ethers, network } from 'hardhat';
-import { findEvent } from '../../SampleCoin/test/helpers/utils';
 import { Factory } from './fixtures/contracts';
 import { initialErc20Transfers } from './fixtures/initial-transfers';
-import { assertErrorMessage } from './helpers/utils';
-
+import { assertErrorMessage, findEvent, mineBlock } from './helpers/utils';
 
 function tokenFormat (amount : BigNumberish, decimals : number = 18) : BigNumber
 {
@@ -47,7 +45,9 @@ const month = 30 * day;
 
 describe('Staking contract', async() => {
     
-    describe('Creating rewards pool', async() => {
+    
+    
+    xdescribe('Creating rewards pool', async() => {
         let creator, alice, bob, john, jane;
         let tokenMain : Coin;
         let tokenReward : Coin;
@@ -189,7 +189,44 @@ describe('Staking contract', async() => {
                 expect(delta).to.be.equal(tokenFormat(10000));
             }
         });
+        
+        it('Creates proper pools', async() => {
+            // approve tokens to contract
+            {
+                const tx = await tokenReward.connect(creator).approve(
+                    stakingContract.address,
+                    tokenFormat(10000)
+                );
+                const result = await tx.wait();
+                expect(result.status).to.be.equal(1);
+            }
+            
+            // create by owner with require amount
+            {
+                const balanceBefore = await tokenReward.balanceOf(creator.address);
+                
+                const tx = await stakingContract.connect(creator).createRewardsPool(
+                    tokenReward.address,
+                    tokenFormat(10000),
+                    month
+                );
+                const result = await tx.wait();
+                
+                expect(result.status).to.be.equal(1);
+                
+                const rewardPools = await stakingContract.rewardPools(0);
+                expect(rewardPools.token).to.be.equal(tokenReward.address);
+                expect(rewardPools.unspentAmount).to.be.equal(tokenFormat(10000));
+                expect(rewardPools.rewardPerSecond).to.be.equal(tokenFormat(10000).div(month));
+    
+                const latestBlock = await ethers.provider.getBlock('latest');
+                expect(rewardPools.lastDistribution).to.be.equal(latestBlock.timestamp);
+                expect(rewardPools.expiration).to.be.equal(latestBlock.timestamp + month);
+            }
+        });
     });
+    
+    
     
     
     describe('Staking', async() => {
@@ -197,6 +234,7 @@ describe('Staking contract', async() => {
         let tokenMain : Coin;
         let tokenRewards : { [i : number] : Coin } = {};
         let stakingContract : Staking;
+        let rewardPools : { [i : number] : any } = {};
         
         beforeEach(async() => {
             [ creator, alice, bob, john, jane ] = await ethers.getSigners();
@@ -263,6 +301,9 @@ describe('Staking contract', async() => {
                     );
                     const result = await tx.wait();
                     expect(result.status).to.be.equal(1);
+                    
+                    const event = findEvent<RewardPoolCreatedEvent>(result, 'RewardPoolCreated');
+                    rewardPools[event.args.index.toNumber()] = await stakingContract.rewardPools(event.args.index.toNumber());
                 }
             }
         });
@@ -306,7 +347,7 @@ describe('Staking contract', async() => {
         });
         
         it('Returns proper state informations', async() => {
-            // state before any action
+            // check state before any action
             {
                 const stake = await stakingContract.balanceOf(alice.address);
                 expect(stake).to.be.equal(0);
@@ -338,6 +379,8 @@ describe('Staking contract', async() => {
                 expect(result.status).to.be.equal(1);
             }
             
+            const stakeBlock = await ethers.provider.getBlock('latest');
+            
             // check state
             {
                 const stake = await stakingContract.balanceOf(alice.address);
@@ -364,10 +407,15 @@ describe('Staking contract', async() => {
                 const stake = await stakingContract.balanceOf(alice.address);
                 expect(stake).to.be.equal(tokenFormat(3000));
                 
+                const latestBlock = await ethers.provider.getBlock('latest');
+                const deltaTime = latestBlock.timestamp - stakeBlock.timestamp;
+            
                 const rewards = await stakingContract.rewardsOf(alice.address);
-                expect(rewards[0].balance).to.be.equal('1388888888888888888400');
-                expect(rewards[1].balance).to.be.equal('6944444444444444442000');
-                expect(rewards[2].balance).to.be.equal('6944443200');
+                
+                for (const [rewardPoolIdx, rewardPool] of Object.entries(rewardPools)) {
+                    const targetReward = rewardPool.rewardPerSecond.mul(deltaTime);
+                    expect(rewards[rewardPoolIdx].balance).to.be.equal(targetReward);
+                }
             }
             
             // mine next block after some time
@@ -377,16 +425,119 @@ describe('Staking contract', async() => {
             
             // check state
             {
+                const latestBlock = await ethers.provider.getBlock('latest');
+                const deltaTime = latestBlock.timestamp - stakeBlock.timestamp;
+            
                 const rewards = await stakingContract.rewardsOf(alice.address);
-                expect(rewards[0].balance).to.be.equal('2777777777777777776800');
-                expect(rewards[1].balance).to.be.equal('13888888888888888884000');
-                expect(rewards[2].balance).to.be.equal('13888886400');
+                
+                for (const [rewardPoolIdx, rewardPool] of Object.entries(rewardPools)) {
+                    const targetReward = rewardPool.rewardPerSecond.mul(deltaTime);
+                    expect(rewards[rewardPoolIdx].balance).to.be.equal(targetReward);
+                }
             }
         });
         
+        
         it('Should properly share rewards', async() => {
-        
-        
+            await network.provider.send('evm_setAutomine', [ false ]);
+            
+            const stakers : any = [
+                { account: alice, amount: tokenFormat(625), share: 0 },
+                { account: bob, amount: tokenFormat(250), share: 0 },
+                { account: jane, amount: tokenFormat(125), share: 0 },
+            ];
+            
+            // check state before any action
+            for (const staker of stakers) {
+                const stake = await stakingContract.balanceOf(staker.account.address);
+                expect(stake).to.be.equal(0);
+                
+                const rewards = await stakingContract.rewardsOf(staker.account.address);
+                for (let i = 0; i < 3; ++i) {
+                    expect(rewards[i].token).to.be.equal(tokenRewards[i].address);
+                    expect(rewards[i].balance).to.be.equal(0);
+                }
+            }
+            
+            await mineBlock();
+            
+            // stake
+            for (const staker of stakers) {
+                await tokenMain.connect(staker.account).approve(stakingContract.address, tokenFormat(10000000));
+                await stakingContract.connect(staker.account).stake(staker.amount);
+            }
+            
+            const stakeBlock = await mineBlock();
+            
+            // check state
+            // stake ratio (62.5%, 25%, 12.5%)
+            for (const staker of stakers) {
+                const stake = await stakingContract.balanceOf(staker.account.address);
+                expect(stake).to.be.equal(staker.amount);
+            }
+            
+            // check state again after while
+            await mineBlock(100);
+            
+            {
+                const latestBlock = await ethers.provider.getBlock('latest');
+                const deltaTime = latestBlock.timestamp - stakeBlock.timestamp;
+            
+                const totalSupply = await stakingContract.totalSupply();
+                
+                for (const account of [ alice, bob, jane ]) {
+                    const balance = await stakingContract.balanceOf(account.address);
+                    const rewards = await stakingContract.rewardsOf(account.address);
+                    
+                    for (const [rewardPoolIdx, rewardPool] of Object.entries(rewardPools)) {
+                        const targetReward = rewardPool.rewardPerSecond
+                            .mul(deltaTime)
+                            .mul(balance)
+                            .div(totalSupply);
+                        expect(rewards[rewardPoolIdx].balance).to.be.equal(targetReward);
+                    }
+                }
+            }
+            
+            // call distribution -> stake
+            await stakingContract.connect(jane).stake(tokenFormat(125));
+            const secondStaking = await mineBlock();
+            
+            // calculate shares
+            let totalShares = await stakingContract.totalSupply();
+            
+            for (const staker of stakers) {
+                staker.share = await stakingContract.balanceOf(staker.account.address);
+                
+                staker.rewards = await stakingContract.rewardsOf(staker.account.address);
+                const rewards = staker.rewards.reduce((acc, v) => v.balance.add(acc), BigNumber.from(0));
+                
+                staker.share = rewards.add(staker.share);
+                totalShares = rewards.add(totalShares);
+            }
+            
+            
+            await mineBlock(100);
+            
+            {
+                const latestBlock = await ethers.provider.getBlock('latest');
+                const deltaTime = latestBlock.timestamp - secondStaking.timestamp;
+            
+                for (const staker of stakers) {
+                    const rewards = await stakingContract.rewardsOf(staker.account.address);
+                    
+                    for (const [rewardPoolIdx, rewardPool] of Object.entries(rewardPools)) {
+                        let targetReward = rewardPool.rewardPerSecond
+                            .mul(deltaTime)
+                            .mul(staker.share)
+                            .div(totalShares);
+                            
+                        targetReward = targetReward.add(staker.rewards[rewardPoolIdx].balance)
+                        
+                        expect(rewards[rewardPoolIdx].balance).to.be.equal(targetReward);
+                    }
+                }
+            }
         });
     });
 });

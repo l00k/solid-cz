@@ -1,9 +1,10 @@
 import { smock } from '@defi-wonderland/smock';
+import { Block } from '@ethersproject/abstract-provider';
 import { ContractReceipt } from '@ethersproject/contracts/src.ts/index';
 import chai, { expect } from 'chai';
 import chaiSubset from 'chai-subset';
 import { ContractTransaction, Event } from 'ethers';
-import { network } from 'hardhat';
+import { ethers, network } from 'hardhat';
 
 chai.use(chaiSubset);
 chai.use(smock.matchers);
@@ -27,6 +28,15 @@ export async function timetravel (seconds : number) : Promise<any>
 {
     await network.provider.send('evm_increaseTime', [ seconds ]);
     return network.provider.send('evm_mine');
+}
+
+export async function mineBlock (delay : number = 10) : Promise<Block>
+{
+    const previousBlock = await ethers.provider.getBlock('latest');
+    const nextTimestamp = previousBlock.timestamp + delay;
+    await network.provider.send('evm_setNextBlockTimestamp', [ nextTimestamp ]);
+    await network.provider.send('evm_mine');
+    return ethers.provider.getBlock('latest');
 }
 
 export async function assertErrorMessage (

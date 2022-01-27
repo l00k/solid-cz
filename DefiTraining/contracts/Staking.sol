@@ -7,6 +7,7 @@ import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 import {EnumerableSet} from "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
 
+
 contract Staking is
     ERC20("4soft Defi Staking", "x4sDS"),
     Ownable
@@ -19,16 +20,16 @@ contract Staking is
     error WrongTimespan();
     error InsufficientBalance(uint256 required, uint256 balance);
 
-    event RewardPoolCreated(address rewardToken, uint256 amount, uint64 timespan);
+    event RewardPoolCreated(uint256 index, address rewardToken, uint256 amount, uint64 timespan);
     event TokenStaked(uint256 amount);
 
 
     struct RewardPool {
         IERC20 token;
-        uint256 pool;
+        uint256 unspentAmount;
         uint256 rewardPerSecond;
         uint64 lastDistribution;
-        uint64 endTime;
+        uint64 expiration;
     }
 
     struct Stake {
@@ -41,12 +42,20 @@ contract Staking is
         uint256 balance;
     }
 
+
+    // Contract state
+
     IERC20 private _stakeToken;
+
     EnumerableSet.AddressSet private _stakers;
 
-    RewardPool[] private _rewardPools;
+    mapping(address => uint256) private _stakerShare;
+    uint256 private _totalShares;
+
+    RewardPool[] public rewardPools;
 
     mapping(address => mapping(uint32 => uint256)) private _distributedRewards;
+
 
 
     constructor(address stakeToken) {
@@ -81,22 +90,19 @@ contract Staking is
         // transfer funds
         token.transferFrom(msg.sender, address(this), amount);
 
-        // maybe it is good idea to deploy token storage contract and transfer funds there?
-        // in order to separate rewards pool from contract balance
-
         // calculate reward per second
         uint256 rewardPerSecond = amount / timespan;
 
         // create new pool
-        _rewardPools.push(RewardPool(
+        rewardPools.push(RewardPool(
             token,
             amount,
             rewardPerSecond,
-            0,
+            uint64(block.timestamp),
             uint64(block.timestamp + timespan)
         ));
 
-        emit RewardPoolCreated(address(token), amount, timespan);
+        emit RewardPoolCreated(rewardPools.length - 1, address(token), amount, timespan);
     }
 
     /**
@@ -124,59 +130,13 @@ contract Staking is
         // mint share token
         _mint(msg.sender, amount);
 
-        // add new staker to list
+        // update shares
+        _stakerShare[msg.sender] += amount;
+        _totalShares += amount;
+
         _stakers.add(msg.sender);
 
         emit TokenStaked(amount);
-    }
-
-    /**
-     * @dev
-     * Calculate sum of all distributed rewards
-     */
-    function distributedRewards() public view returns (Reward[] memory)
-    {
-        Reward[] memory rewards = new Reward[](_rewardPools.length);
-
-        // assign proper initial values
-        for (uint32 p = 0; p < _rewardPools.length; ++p) {
-            rewards[p] = Reward(
-                address(_rewardPools[p].token),
-                0
-            );
-        }
-
-        for (uint32 p = 0; p < _rewardPools.length; ++p) {
-            for (uint256 s = 0; s < _stakers.length(); ++s) {
-                rewards[p].balance += _distributedRewards[_stakers.at(s)][p];
-            }
-        }
-
-        return rewards;
-    }
-
-    /**
-     * @dev
-     * Multply amount using account share
-     */
-    function _accountShareMultiply(address account, uint256 amount) internal view returns (uint256)
-    {
-        if (totalSupply() == 0) {
-            return 0;
-        }
-
-        uint256 totalRewards = 0;
-
-        uint256 accountRewards = 0;
-        for (uint32 p = 0; p < _rewardPools.length; ++p) {
-            accountRewards += _distributedRewards[account][p];
-
-            for (uint256 s = 0; s < _stakers.length(); ++s) {
-                totalRewards += _distributedRewards[_stakers.at(s)][p];
-            }
-        }
-
-        return amount * (balanceOf(account) + accountRewards) / (totalSupply() + totalRewards);
     }
 
     /**
@@ -186,67 +146,84 @@ contract Staking is
      */
     function rewardsOf(address account) public view returns (Reward[] memory)
     {
-        Reward[] memory rewards = new Reward[](_rewardPools.length);
+        Reward[] memory rewards = new Reward[](rewardPools.length);
 
         // assign proper initial values
-        for (uint32 p = 0; p < _rewardPools.length; ++p) {
+        for (uint32 p = 0; p < rewardPools.length; ++p) {
             rewards[p] = Reward(
-                address(_rewardPools[p].token),
-                0
+                address(rewardPools[p].token),
+                _distributedRewards[account][p] + _nonDistributedRewardOf(account, rewardPools[p])
             );
-        }
-
-        // calculate rewards before giving away
-        for (uint32 p = 0; p < _rewardPools.length; ++p) {
-            rewards[p].balance += _distributedRewards[account][p];
-
-            uint64 calcEndTime = uint64(Math.min(block.timestamp, _rewardPools[p].endTime));
-            uint64 deltaTime = calcEndTime - _rewardPools[p].lastDistribution;
-
-            if (deltaTime > 0) {
-                uint256 partialDistribution = deltaTime * _rewardPools[p].rewardPerSecond;
-
-                // reduce partial distribution to pool limit
-                if (partialDistribution > _rewardPools[p].pool) {
-                    partialDistribution = _rewardPools[p].pool;
-                }
-
-                rewards[p].balance += _accountShareMultiply(account, partialDistribution);
-            }
         }
 
         return rewards;
     }
 
+    function _nonDistributedRewardOf(
+        address account,
+        RewardPool storage rewardPool
+    ) internal view returns (uint256)
+    {
+        uint64 calcEndTime = uint64(Math.min(block.timestamp, rewardPool.expiration));
+
+        // time from last distribution (if any) to end time
+        uint64 deltaTime = calcEndTime - rewardPool.lastDistribution;
+        if (deltaTime == 0) {
+            return 0;
+        }
+
+        uint256 partialDistribution = deltaTime * rewardPool.rewardPerSecond;
+
+        // reduce partial distribution to unspend amount
+        if (partialDistribution > rewardPool.unspentAmount) {
+            partialDistribution = rewardPool.unspentAmount;
+        }
+
+        return _accountShareMultiply(account, partialDistribution);
+    }
+
+    /**
+     * @dev
+     * Multply amount using account share
+     */
+    function _accountShareMultiply(address account, uint256 amount) internal view returns (uint256)
+    {
+        if (_totalShares == 0) {
+            return 0;
+        }
+
+        return amount * _stakerShare[account] / _totalShares;
+    }
+
     /**
      * @dev
      * Distribute rewards using current context values
-     * especially share, blockPerSecond
+     * Required when reward pools are changed, stake, withdraw
      */
     function _distributeRewards() internal
     {
-        for (uint32 p = 0; p < _rewardPools.length; ++p) {
-            uint64 calcEndTime = uint64(Math.min(block.timestamp, _rewardPools[p].endTime));
-            uint64 deltaTime = calcEndTime - _rewardPools[p].lastDistribution;
-
-            if (deltaTime > 0) {
-                uint256 partialDistribution = deltaTime * _rewardPools[p].rewardPerSecond;
-
-                // reduce partial distribution to pool limit
-                if (partialDistribution > _rewardPools[p].pool) {
-                    partialDistribution = _rewardPools[p].pool;
-                }
-
-                for (uint s = 0; s < _stakers.length(); ++s) {
-                    // calculate distribution using inversed share factor
-                    uint256 amount = _accountShareMultiply(_stakers.at(s), partialDistribution);
-
-                    _distributedRewards[_stakers.at(s)][p] += amount;
-                    _rewardPools[p].pool -= amount;
-                }
+        for (uint32 p = 0; p < rewardPools.length; ++p) {
+            uint64 deltaTime = uint64(block.timestamp) - rewardPools[p].lastDistribution;
+            if (deltaTime == 0) {
+                // already distributed
+                continue;
             }
 
-            _rewardPools[p].lastDistribution = uint64(block.timestamp);
+            for (uint s = 0; s < _stakers.length(); ++s) {
+                uint256 amount = _nonDistributedRewardOf(_stakers.at(s), rewardPools[p]);
+
+                // distribute rewards
+                _distributedRewards[_stakers.at(s)][p] += amount;
+
+                // adjust share
+                _stakerShare[_stakers.at(s)] += amount;
+                _totalShares += amount;
+
+                // reduce reward pool unspend amount
+                rewardPools[p].unspentAmount -= amount;
+            }
+
+            rewardPools[p].lastDistribution = uint64(block.timestamp);
         }
     }
 
