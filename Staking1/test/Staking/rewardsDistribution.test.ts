@@ -1,5 +1,5 @@
 import { Coin } from '@/Coin';
-import { RewardsClaimedEvent, Staking } from '@/Staking';
+import { RewardPoolModifiedEvent, RewardsClaimedEvent, Staking } from '@/Staking';
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
 import { expect } from 'chai';
 import { BigNumber, BigNumberish } from 'ethers';
@@ -474,6 +474,84 @@ describe('Staking / Rewards distribution', async() => {
     it('Rewards distribution after pool change', async() => {
         await network.provider.send('evm_setAutomine', [ false ]);
         
+        // Check state before any action
+        {
+            await checkStakers('alice');
+        }
+        
+        // Alice stakes 1000
+        {
+            const txs = await stakeTokens({ alice: tokenFormat(1000) });
+            await mineBlock();
+            await waitForTxs(txs);
+            
+            // directly after staking
+            // rewards are still 0 (cuz no times passed since stake) but stake is increased
+            await checkStakers('alice');
+            await checkShares({ alice: 1 });
+        }
+        
+        // Mine next block (100 seconds later)
+        {
+            await mineBlock(100);
+            
+            // Shares factor didn't change
+            // Still Alice has 100% shares so she should get all rewards
+            addLocalRewards({ alice: 1 }, 100);
+            
+            await checkStakers('alice');
+            await checkShares({ alice: 1 });
+        }
+        
+        // Change pool params
+        {
+            const tx = await stakingContract.connect(accounts.owner).modifyRewardPool(
+                0,
+                20000
+            );
+            
+            await mineBlock(100);
+            
+            const result = await tx.wait();
+            expect(result.status).to.be.equal(1);
+            
+            // add and check rewards using previos ratio
+            addLocalRewards({ alice: 1 }, 100);
+            
+            await checkShares({ alice: 1 });
+            
+            // update new rewards per second
+            pools[0].rewardsPerSecond = tokenFormat(1000000)
+                .sub(stakers.alice.rewards[0])
+                .div(20000);
+                
+            // check reward/s in state
+            const rewardPool = await stakingContract.rewardPools(0);
+            expect(rewardPool.rewardPerSecond).to.be.equal(pools[0].rewardsPerSecond);
+        }
+        
+        // Mine next block (100 seconds later)
+        {
+            await mineBlock(100);
+            
+            // Shares factor didn't change
+            // Still Alice has 100% shares so she should get all rewards
+            addLocalRewards({ alice: 1 }, 100);
+            
+            await checkStakers('alice');
+            await checkShares({ alice: 1 });
+        }
+        
+        // Mine next block (20000 seconds later)
+        // Pool 2 and 3 expired
+        {
+            await mineBlock(20000);
+            
+            addLocalRewards({ alice: 1 }, [ 19900, 19700, 700 ]);
+            
+            await checkStakers('alice');
+            await checkShares({ alice: 1 });
+        }
     });
     
 });

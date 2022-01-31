@@ -7,9 +7,6 @@ import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 import {EnumerableSet} from "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
 
 
-import "hardhat/console.sol";
-
-
 contract Staking is
     ERC20("4soft Defi Staking", "x4sDS"),
     Ownable
@@ -110,13 +107,13 @@ contract Staking is
 
         // create new pool
         rewardPools.push(RewardPool(
-                token,
-                amount,
-                rewardPerSecond,
-                timespan,
-                totalShares > 0 ? uint64(block.timestamp) : 0,
-                totalShares > 0 ? uint64(block.timestamp) + timespan : 0
-            ));
+            token,
+            amount,
+            rewardPerSecond,
+            timespan,
+            totalShares > 0 ? uint64(block.timestamp) : 0,
+            totalShares > 0 ? uint64(block.timestamp) + timespan : 0
+        ));
 
         emit RewardPoolCreated(rewardPools.length - 1, address(token), amount, timespan);
     }
