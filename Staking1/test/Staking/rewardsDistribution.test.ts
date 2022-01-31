@@ -33,7 +33,7 @@ type Stakers = {
 
 
 
-xdescribe('Staking / Rewards distribution', async() => {
+describe('Staking / Rewards distribution', async() => {
     let accounts : Partial<Signers> = {};
     
     let tokenMain : Coin;
@@ -469,4 +469,11 @@ xdescribe('Staking / Rewards distribution', async() => {
             await checkStakers('alice', 'bob', 'carol', 'dave');
         }
     });
+    
+    
+    it('Rewards distribution after pool change', async() => {
+        await network.provider.send('evm_setAutomine', [ false ]);
+        
+    });
+    
 });

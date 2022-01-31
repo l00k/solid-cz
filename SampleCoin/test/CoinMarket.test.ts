@@ -36,7 +36,7 @@ contractsToTest.forEach(contractName => {
             {
                 const tx = contract.connect(alice)
                     .changePayoutTarget(bob.address);
-                assertErrorMessage(tx, 'OnlyOwnerAllowed()');
+                await assertErrorMessage(tx, 'OnlyOwnerAllowed()');
             }
             {
                 const tx = await contract.connect(owner)
@@ -60,7 +60,7 @@ contractsToTest.forEach(contractName => {
             {
                 const tx = contract.connect(alice)
                     .changePrice(ethers.utils.parseEther('0.1'));
-                assertErrorMessage(tx, 'OnlyOwnerAllowed()');
+                await assertErrorMessage(tx, 'OnlyOwnerAllowed()');
             }
             {
                 const tx = await contract.connect(owner)
@@ -97,7 +97,7 @@ contractsToTest.forEach(contractName => {
             {
                 const tx = contract.connect(owner)
                     .changePrice(0);
-                assertErrorMessage(tx, 'InvalidPrice(0)');
+                await assertErrorMessage(tx, 'InvalidPrice(0)');
             }
         });
         
@@ -160,7 +160,7 @@ contractsToTest.forEach(contractName => {
                 const send = ethers.utils.parseEther('0.16');
                 const tx = contract.connect(alice)
                     .buy(15, { value: send });
-                assertErrorMessage(tx, `InvalidAmountSend(${send}, ${required})`);
+                await assertErrorMessage(tx, `InvalidAmountSend(${send}, ${required})`);
             }
             
             {
@@ -168,14 +168,14 @@ contractsToTest.forEach(contractName => {
                 const send = ethers.utils.parseEther('0.14');
                 const tx = contract.connect(alice)
                     .buy(15, { value: send });
-                assertErrorMessage(tx, `InvalidAmountSend(${send}, ${required})`);
+                await assertErrorMessage(tx, `InvalidAmountSend(${send}, ${required})`);
             }
         });
         
         it('Should not allow buying 0', async() => {
             const tx = contract.connect(alice)
                 .buy(0, { value: 0 });
-            assertErrorMessage(tx, 'WrongAmount(0)');
+            await assertErrorMessage(tx, 'WrongAmount(0)');
         });
         
         it('Should properly transfer funds', async() => {
@@ -201,7 +201,7 @@ contractsToTest.forEach(contractName => {
                 to: contract.address,
                 value: ethers.utils.parseEther('1'),
             });
-            assertErrorMessage(tx, 'NotAllowed()');
+            await assertErrorMessage(tx, 'NotAllowed()');
         });
         
     });

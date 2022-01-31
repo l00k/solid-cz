@@ -41,12 +41,12 @@ contractsToTest.forEach(contractName => {
             {
                 const tx = contract.connect(alice)
                     .modifiyGlobalLock(true);
-                assertErrorMessage(tx, 'OnlyOwnerAllowed()');
+                await assertErrorMessage(tx, 'OnlyOwnerAllowed()');
             }
             {
                 const tx = contract.connect(alice)
                     .modifiyAccountLock(bob.address, true);
-                assertErrorMessage(tx, 'OnlyOwnerAllowed()');
+                await assertErrorMessage(tx, 'OnlyOwnerAllowed()');
             }
             {
                 const tx = await contract.connect(owner)
@@ -198,7 +198,7 @@ contractsToTest.forEach(contractName => {
                 
                 const tx = contract.connect(alice)
                     .transfer(owner.address, 10);
-                assertErrorMessage(tx, 'AllAccountsLocked()');
+                await assertErrorMessage(tx, 'AllAccountsLocked()');
             }
             {
                 const isLocked = await contract.isLocked(bob.address);
@@ -206,7 +206,7 @@ contractsToTest.forEach(contractName => {
                 
                 const tx = contract.connect(bob)
                     .transfer(owner.address, 10);
-                assertErrorMessage(tx, 'AllAccountsLocked()');
+                await assertErrorMessage(tx, 'AllAccountsLocked()');
             }
         });
         
@@ -246,7 +246,7 @@ contractsToTest.forEach(contractName => {
                 
                 const tx = contract.connect(alice)
                     .transfer(owner.address, 10);
-                assertErrorMessage(tx, 'AccountLocked()');
+                await assertErrorMessage(tx, 'AccountLocked()');
             }
             {
                 const isLocked = await contract.isLocked(bob.address);

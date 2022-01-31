@@ -112,7 +112,7 @@ contractsToTest.forEach(contractName => {
                     const tx = contract
                         .connect(owner)
                         .transfer(alice.address, 1000001);
-                    assertErrorMessage(tx, 'InsufficientFunds(1000001, 1000000)');
+                    await assertErrorMessage(tx, 'InsufficientFunds(1000001, 1000000)');
                 }
                 
                 {
@@ -128,7 +128,7 @@ contractsToTest.forEach(contractName => {
                     const tx = contract
                         .connect(alice)
                         .transfer(bob.address, 1001);
-                    assertErrorMessage(tx, 'InsufficientFunds(1001, 1000)');
+                    await assertErrorMessage(tx, 'InsufficientFunds(1001, 1000)');
                 }
             });
             
@@ -137,7 +137,7 @@ contractsToTest.forEach(contractName => {
                     const tx = contract
                         .connect(owner)
                         .transfer(alice.address, 0);
-                    assertErrorMessage(tx, 'WrongAmount(0)');
+                    await assertErrorMessage(tx, 'WrongAmount(0)');
                 }
             });
         });
@@ -265,7 +265,7 @@ contractsToTest.forEach(contractName => {
                     const tx = contract
                         .connect(alice)
                         .transferFrom(owner.address, bob.address, 1);
-                    assertErrorMessage(tx, 'AmountExceedAllowed(1, 0)');
+                    await assertErrorMessage(tx, 'AmountExceedAllowed(1, 0)');
                 }
                 
                 {
@@ -280,7 +280,7 @@ contractsToTest.forEach(contractName => {
                     const tx = contract
                         .connect(alice)
                         .transferFrom(owner.address, bob.address, 10001);
-                    assertErrorMessage(tx, 'AmountExceedAllowed(10001, 10000)');
+                    await assertErrorMessage(tx, 'AmountExceedAllowed(10001, 10000)');
                 }
                 
                 {
@@ -303,7 +303,7 @@ contractsToTest.forEach(contractName => {
                     const tx = contract
                         .connect(alice)
                         .transferFrom(owner.address, bob.address, 2501);
-                    assertErrorMessage(tx, 'AmountExceedAllowed(2501, 2500)');
+                    await assertErrorMessage(tx, 'AmountExceedAllowed(2501, 2500)');
                 }
             });
             
@@ -328,7 +328,7 @@ contractsToTest.forEach(contractName => {
                     const tx = contract
                         .connect(bob)
                         .transferFrom(alice.address, bob.address, 1001);
-                    assertErrorMessage(tx, 'InsufficientFunds(1001, 1000)');
+                    await assertErrorMessage(tx, 'InsufficientFunds(1001, 1000)');
                 }
             });
             
@@ -337,7 +337,7 @@ contractsToTest.forEach(contractName => {
                     const tx = contract
                         .connect(bob)
                         .transferFrom(alice.address, bob.address, 0);
-                    assertErrorMessage(tx, 'WrongAmount(0)');
+                    await assertErrorMessage(tx, 'WrongAmount(0)');
                 }
                 
                 {
@@ -352,7 +352,7 @@ contractsToTest.forEach(contractName => {
                     const tx = contract
                         .connect(bob)
                         .transferFrom(alice.address, bob.address, 0);
-                    assertErrorMessage(tx, 'WrongAmount(0)');
+                    await assertErrorMessage(tx, 'WrongAmount(0)');
                 }
                 
                 {
@@ -367,7 +367,7 @@ contractsToTest.forEach(contractName => {
                     const tx = contract
                         .connect(bob)
                         .transferFrom(alice.address, bob.address, 0);
-                    assertErrorMessage(tx, 'WrongAmount(0)');
+                    await assertErrorMessage(tx, 'WrongAmount(0)');
                 }
             });
             

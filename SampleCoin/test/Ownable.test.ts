@@ -54,7 +54,7 @@ contractsToTest.forEach(contractName => {
             {
                 const tx = contract.connect(alice)
                     .changeMasterOwnership(alice.address);
-                assertErrorMessage(tx, 'OnlyMasterOwnerAllowed()');
+                await assertErrorMessage(tx, 'OnlyMasterOwnerAllowed()');
                 
                 const masterOwner = await contract.masterOwner();
                 expect(masterOwner).to.be.equal(owner.address);
@@ -81,7 +81,7 @@ contractsToTest.forEach(contractName => {
             {
                 const tx = contract.connect(owner)
                     .changeMasterOwnership(owner.address);
-                assertErrorMessage(tx, 'OnlyMasterOwnerAllowed()');
+                await assertErrorMessage(tx, 'OnlyMasterOwnerAllowed()');
                 
                 const masterOwner = await contract.masterOwner();
                 expect(masterOwner).to.be.equal(alice.address);

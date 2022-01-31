@@ -39,7 +39,7 @@ describe('Staking / Staking', async() => {
     it('Properly validate arguments', async() => {
         {
             const tx = stakingContract.connect(creator).stake(0);
-            assertErrorMessage(tx, 'WrongAmount()');
+            await assertErrorMessage(tx, 'WrongAmount()');
         }
     });
     
@@ -55,7 +55,7 @@ describe('Staking / Staking', async() => {
         
         {
             const tx = stakingContract.connect(alice).stake(tokenFormat(1001));
-            assertErrorMessage(tx, `InsufficientBalance(${tokenFormat(1001)}, ${tokenFormat(1000)})`);
+            await assertErrorMessage(tx, `InsufficientBalance(${tokenFormat(1001)}, ${tokenFormat(1000)})`);
         }
         
         {

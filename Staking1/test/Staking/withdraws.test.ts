@@ -41,7 +41,7 @@ type Stakers = {
 
 
 
-xdescribe('Staking / Withdraws', async() => {
+describe('Staking / Withdraws', async() => {
     let accounts : Partial<Signers> = {};
     
     let tokenMain : Coin;

@@ -62,7 +62,8 @@ export async function assertErrorMessage (
 ) : Promise<void>
 {
     return tx.then(
-        (value) => {
+        (value) =>
+        {
             expect.fail(`Found value instead of error: ${value}`);
         },
         (reason) => {

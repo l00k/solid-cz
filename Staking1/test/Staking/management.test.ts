@@ -1,17 +1,23 @@
 import { Coin } from '@/Coin';
-import { EarlyWithdrawalParamsChangedEvent, RewardPoolCreatedEvent, StakeLimitsChangedEvent, Staking } from '@/Staking';
+import {
+    EarlyWithdrawalParamsChangedEvent,
+    RewardPoolCreatedEvent,
+    RewardPoolModifiedEvent,
+    StakeLimitsChangedEvent,
+    Staking
+} from '@/Staking';
 import { expect } from 'chai';
 import { ethers, network } from 'hardhat';
 import { Factory } from '../fixtures/contracts';
 import { createTokens } from '../fixtures/tokens';
-import { assertErrorMessage, findEvent, tokenFormat } from '../helpers/utils';
+import { assertErrorMessage, findEvent, mineBlock, tokenFormat } from '../helpers/utils';
 
 
 const day = 24 * 3600;
 const month = 30 * day;
 
 
-xdescribe('Staking / Management', async() => {
+describe('Staking / Management', async() => {
     let creator, alice, bob, john, jane;
     let tokenMain : Coin;
     let tokenReward : Coin;
@@ -28,12 +34,12 @@ xdescribe('Staking / Management', async() => {
     it('Properly validate arguments', async() => {
         {
             const tx = stakingContract.connect(creator).createRewardsPool(tokenReward.address, 0, month);
-            assertErrorMessage(tx, 'WrongAmount()');
+            await assertErrorMessage(tx, 'WrongAmount()');
         }
         
         {
             const tx = stakingContract.connect(creator).createRewardsPool(tokenReward.address, 1000, 0);
-            assertErrorMessage(tx, 'WrongTimespan()');
+            await assertErrorMessage(tx, 'WrongTimespan()');
         }
     });
     
@@ -53,7 +59,7 @@ xdescribe('Staking / Management', async() => {
                 tokenFormat(10000),
                 month
             );
-            assertErrorMessage(tx, 'Ownable: caller is not the owner');
+            await assertErrorMessage(tx, 'Ownable: caller is not the owner');
         }
         
         // create by owner
@@ -94,7 +100,7 @@ xdescribe('Staking / Management', async() => {
                 tokenFormat(10000),
                 month
             );
-            assertErrorMessage(tx, `InsufficientBalance(${tokenFormat(10000)}, ${tokenFormat(1000)})`);
+            await assertErrorMessage(tx, `InsufficientBalance(${tokenFormat(10000)}, ${tokenFormat(1000)})`);
         }
         
         // approve more tokens to contract
@@ -165,6 +171,127 @@ xdescribe('Staking / Management', async() => {
         }
     });
     
+    it('Modify reward pool params only by owner', async() => {
+        // approve tokens to contract
+        {
+            const tx = await tokenReward.connect(creator).approve(
+                stakingContract.address,
+                tokenFormat(10000)
+            );
+            const result = await tx.wait();
+            expect(result.status).to.be.equal(1);
+        }
+        
+        // create by owner with require amount
+        {
+            const tx = await stakingContract.connect(creator).createRewardsPool(
+                tokenReward.address,
+                tokenFormat(10000),
+                10000
+            );
+            const result = await tx.wait();
+            expect(result.status).to.be.equal(1);
+        }
+        
+        // try to create by non owner
+        {
+            const tx = stakingContract.connect(alice).modifyRewardPool(
+                0,
+                1000
+            );
+            await assertErrorMessage(tx, 'Ownable: caller is not the owner');
+        }
+        
+        // modify by owner
+        {
+            const tx = await stakingContract.connect(creator).modifyRewardPool(
+                0,
+                1000
+            );
+            const result = await tx.wait();
+            expect(result.status).to.be.equal(1);
+            
+            const event = findEvent<RewardPoolModifiedEvent>(result, 'RewardPoolModified');
+            expect(event.args.poolIdx).to.be.equal(0);
+            expect(event.args.timespan).to.be.equal(1000);
+        }
+        
+        // wrong timespan
+        {
+            const tx = stakingContract.connect(creator).modifyRewardPool(
+                1,
+                0
+            );
+            await assertErrorMessage(tx, 'WrongTimespan()');
+        }
+        
+        // wrong pool id
+        {
+            const tx = stakingContract.connect(creator).modifyRewardPool(
+                1,
+                1000
+            );
+            await assertErrorMessage(tx, 'InvalidPool()');
+        }
+        
+        // expired pool
+        {
+            await mineBlock(10000);
+        
+            const tx = stakingContract.connect(creator).modifyRewardPool(
+                0,
+                1000
+            );
+            await assertErrorMessage(tx, 'InvalidPool()');
+        }
+    });
+    
+    it('Modify all reward pool params', async() => {
+        // approve tokens to contract
+        {
+            const tx = await tokenReward.connect(creator).approve(
+                stakingContract.address,
+                tokenFormat(10000)
+            );
+            const result = await tx.wait();
+            expect(result.status).to.be.equal(1);
+        }
+        
+        // create by owner with require amount
+        {
+            const tx = await stakingContract.connect(creator).createRewardsPool(
+                tokenReward.address,
+                tokenFormat(10000),
+                10000
+            );
+            const result = await tx.wait();
+            expect(result.status).to.be.equal(1);
+        }
+        
+        // try to create by non owner
+        {
+            const tx = stakingContract.connect(alice).modifyAllRewardPools(1000);
+            await assertErrorMessage(tx, 'Ownable: caller is not the owner');
+        }
+        
+        // modify by owner
+        {
+            const tx = await stakingContract.connect(creator).modifyAllRewardPools(1000);
+            const result = await tx.wait();
+            expect(result.status).to.be.equal(1);
+            
+            const event = findEvent<RewardPoolModifiedEvent>(result, 'RewardPoolModified');
+            expect(event.args.poolIdx).to.be.equal(0);
+            expect(event.args.timespan).to.be.equal(1000);
+        }
+        
+        // wrong timespan
+        {
+            const tx = stakingContract.connect(creator).modifyAllRewardPools(0);
+            await assertErrorMessage(tx, 'WrongTimespan()');
+        }
+    });
+    
     it('Change stake limits only by owner', async() => {
         // try to create by non owner
         {
@@ -173,7 +300,7 @@ xdescribe('Staking / Management', async() => {
                 tokenFormat(10),
                 tokenFormat(1000)
             );
-            assertErrorMessage(tx, 'Ownable: caller is not the owner');
+            await assertErrorMessage(tx, 'Ownable: caller is not the owner');
         }
         
         // modify by owner
@@ -221,7 +348,7 @@ xdescribe('Staking / Management', async() => {
                 1000,
                 10 ** 4
             );
-            assertErrorMessage(tx, 'Ownable: caller is not the owner');
+            await assertErrorMessage(tx, 'Ownable: caller is not the owner');
         }
         
         // modify by owner

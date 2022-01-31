@@ -28,7 +28,7 @@ contractsToTest.forEach(contractName => {
             {
                 const tx = contract.connect(alice)
                     .mint(bob.address, 1000);
-                assertErrorMessage(tx, 'OnlyOwnerAllowed()');
+                await assertErrorMessage(tx, 'OnlyOwnerAllowed()');
             }
             
             // add ownership to alice
@@ -94,7 +94,7 @@ contractsToTest.forEach(contractName => {
             {
                 const tx = contract.connect(alice)
                     .burn(bob.address, 1000);
-                assertErrorMessage(tx, 'OnlyOwnerAllowed()');
+                await assertErrorMessage(tx, 'OnlyOwnerAllowed()');
             }
             
             // add ownership to alice
