@@ -13,6 +13,7 @@
     "dependencies": {
         "@chainlink/contracts": "^0.3.0",
         "@openzeppelin/contracts": "^4.4.1",
+        "colors": "^1.4.0",
         "dotenv": "^11.0.0"
     },
     "devDependencies": {

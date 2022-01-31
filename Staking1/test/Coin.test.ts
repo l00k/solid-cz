@@ -2,7 +2,7 @@ import { Coin } from '@/Coin';
 import { expect } from 'chai';
 import { ethers } from 'hardhat';
 import { Factory } from './fixtures/contracts';
-import { initialErc20Transfers } from './fixtures/initial-transfers';
+import { initialErc20Transfers } from './fixtures/tokens';
 
 const coinName : string = 'Test';
 const coinSymbol : string = 'T';
@@ -16,7 +16,8 @@ xdescribe(`Coin`, async() => {
     
     beforeEach(async() => {
         [ creator, alice, bob, john, jane ] = await ethers.getSigners();
-        contract = <any>await Factory.Coin(coinName, coinSymbol, initialSupply, coinDecimals);
+        
+        contract = await Factory.Coin(coinName, coinSymbol, initialSupply, coinDecimals);
         await initialErc20Transfers(contract, 1000);
     });
     

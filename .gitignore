@@ -6,3 +6,5 @@ typechain-types/
 
 .env
 coverage.json
+
+.~lock.*#
