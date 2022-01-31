@@ -14,8 +14,6 @@ contract Staking is
 
     using EnumerableSet for EnumerableSet.AddressSet;
 
-    uint256 private constant PERMILL = 10 ** 6;
-
     error WrongAmount();
     error WrongTimespan();
     error TotalStakeExceedLimit(uint256 limit);
