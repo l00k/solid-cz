@@ -79,8 +79,10 @@ export function tokenFormat (amount : BigNumberish, decimals : number = 18) : Bi
 
 type TxCheckCallback = (tx : ContractTransaction, reciept : ContractReceipt) => void;
 
-export async function waitForTxs (txs : ContractTransaction[], checkCallback? : TxCheckCallback)
+export async function waitForTxs (txs : ContractTransaction[], checkCallback? : TxCheckCallback): Promise<ContractReceipt[]>
 {
+    const results = [];
+
     for (const tx of txs) {
         const result = await tx.wait();
         expect(result.status).to.be.equal(1);
@@ -88,5 +90,9 @@ export async function waitForTxs (txs : ContractTransaction[], checkCallback? : 
         if (checkCallback) {
             checkCallback(tx, result);
         }
+        
+        results.push(result);
     }
+    
+    return results;
 }

@@ -41,7 +41,7 @@ type Stakers = {
 
 
 
-describe('Staking / Rewards claiming', async() => {
+xdescribe('Staking / Rewards claiming', async() => {
     let accounts : Partial<Signers> = {};
     
     let tokenMain : Coin;

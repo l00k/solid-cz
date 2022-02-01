@@ -10,7 +10,7 @@ const initialSupply : number = 100000;
 const coinDecimals : number = 18;
 
 
-describe(`Coin`, async() => {
+xdescribe(`Coin`, async() => {
     let creator, alice, bob, john, jane;
     let contract : Coin;
     

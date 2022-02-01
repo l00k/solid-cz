@@ -17,7 +17,7 @@ const day = 24 * 3600;
 const month = 30 * day;
 
 
-describe('Staking / Management', async() => {
+xdescribe('Staking / Management', async() => {
     let creator, alice, bob, john, jane;
     let tokenMain : Coin;
     let tokenReward : Coin;

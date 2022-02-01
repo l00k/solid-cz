@@ -27,10 +27,10 @@ const config : HardhatUserConfig = {
     },
     networks: {
         hardhat: {
-            forking: {
-                url: `https://eth-mainnet.alchemyapi.io/v2/${alchemyApiKey}`,
-                blockNumber: 13980000
-            }
+            // forking: {
+            //     url: `https://eth-mainnet.alchemyapi.io/v2/${alchemyApiKey}`,
+            //     blockNumber: 13980000
+            // }
         }
     },
     watcher: {

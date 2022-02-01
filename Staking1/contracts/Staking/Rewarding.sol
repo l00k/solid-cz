@@ -1,35 +1,24 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
-import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
-import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
-import {EnumerableSet} from "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
+import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import "@openzeppelin/contracts/utils/math/Math.sol";
+import "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
+import "./Base.sol";
 
 
-contract Staking is
-    ERC20("4soft Defi Staking", "x4sDS"),
-    Ownable
+abstract contract Rewarding is Base
 {
-
     using EnumerableSet for EnumerableSet.AddressSet;
 
-    error WrongAmount();
+
     error WrongTimespan();
-    error TotalStakeExceedLimit(uint256 limit);
-    error StakeBelowMinimal(uint256 min);
-    error StakeAboveMaximal(uint256 max);
-    error InsufficientBalance(uint256 required, uint256 actual);
     error InvalidPool();
 
     event RewardPoolCreated(uint256 poolIdx, address rewardToken, uint256 amount, uint64 timespan);
     event RewardPoolModified(uint256 poolIdx, uint256 amount, uint64 timespan);
-    event TokenStaked(uint256 amount);
-    event RewardsClaimed(uint256 poolIdx, address rewardToken, uint256 amount);
-    event TokenWithdrawn(uint256 amount);
 
-    event StakeLimitsChanged(uint256 totalStakeLimit, uint256 minStakePerAccount, uint256 maxStakePerAccount);
-    event EarlyWithdrawalParamsChanged(uint256 minStakeTime, uint32 earlyWithdrawalSlashRatePermill);
+    event RewardsClaimed(uint256 poolIdx, address rewardToken, uint256 amount);
 
 
     struct RewardPool {
@@ -47,30 +36,11 @@ contract Staking is
     }
 
 
-    // Contract state
-    ERC20 private _stakeToken;
-
-    EnumerableSet.AddressSet private _stakers;
+    RewardPool[] public rewardPools;
 
     mapping(address => mapping(uint256 => uint256)) private _distributedRewards;
 
-    uint256 public totalStakeLimit = 0;
-    uint256 public minStakePerAccount = 0;
-    uint256 public maxStakePerAccount = 0;
 
-    uint256 public minStakeTime = 0;
-    uint32 public earlyWithdrawalSlashRatePermill = 0;
-
-    mapping(address => uint256) public stakerShare;
-    uint256 public totalShares;
-
-    RewardPool[] public rewardPools;
-
-
-
-    constructor(address stakeToken) {
-        _stakeToken = ERC20(stakeToken);
-    }
 
     /**
      * @dev
@@ -116,6 +86,7 @@ contract Staking is
         emit RewardPoolCreated(rewardPools.length - 1, address(token), amount, timespan);
     }
 
+
     function modifyRewardPool(
         uint256 poolIdx,
         uint64 timespan
@@ -145,6 +116,7 @@ contract Staking is
         emit RewardPoolModified(poolIdx, rewardPool.unspentAmount, timespan);
     }
 
+
     function modifyAllRewardPools(uint64 timespan) public onlyOwner
     {
         if (timespan == 0) {
@@ -154,86 +126,6 @@ contract Staking is
         for (uint256 p = 0; p < rewardPools.length; ++p) {
             modifyRewardPool(p, timespan);
         }
-    }
-
-    /**
-     * @dev
-     * Change stake limits
-     */
-    function changeStakeLimits(
-        uint256 totalStakeLimit_,
-        uint256 minStakePerAccount_,
-        uint256 maxStakePerAccount_
-    ) public onlyOwner
-    {
-        totalStakeLimit = totalStakeLimit_;
-        minStakePerAccount = minStakePerAccount_;
-        maxStakePerAccount = maxStakePerAccount_;
-
-        emit StakeLimitsChanged(totalStakeLimit, minStakePerAccount, maxStakePerAccount);
-    }
-
-    /**
-     * @dev
-     * Change early withdrawal params
-     */
-    function changeEarlyWithdrawalParams(
-        uint256 minStakeTime_,
-        uint32 earlyWithdrawalSlashRatePermill_
-    ) public onlyOwner
-    {
-        minStakeTime = minStakeTime_;
-        earlyWithdrawalSlashRatePermill = earlyWithdrawalSlashRatePermill_;
-
-        emit EarlyWithdrawalParamsChanged(minStakeTime, earlyWithdrawalSlashRatePermill);
-    }
-
-    /**
-     * @dev
-     * Stake given amount of token
-     * Amount need to be approved before staking
-     */
-    function stake(uint256 amount) external
-    {
-        if (amount == 0) {
-            revert WrongAmount();
-        }
-
-        uint256 targetTotalStake = totalSupply() + amount;
-        if (totalStakeLimit != 0 && targetTotalStake > totalStakeLimit) {
-            revert TotalStakeExceedLimit(totalStakeLimit);
-        }
-
-        uint256 targetBalance = balanceOf(msg.sender) + amount;
-        if (minStakePerAccount != 0 && targetBalance < minStakePerAccount) {
-            revert StakeBelowMinimal(minStakePerAccount);
-        }
-        if (maxStakePerAccount != 0 && targetBalance > maxStakePerAccount) {
-            revert StakeAboveMaximal(maxStakePerAccount);
-        }
-
-        _distributeRewardsAndUpdateShares();
-
-        // check current allowance
-        uint256 allowance = _stakeToken.allowance(msg.sender, address(this));
-        if (allowance < amount) {
-            revert InsufficientBalance(amount, allowance);
-        }
-
-        // transfer funds to contract
-        _stakeToken.transferFrom(msg.sender, address(this), amount);
-
-        // mint share token
-        _mint(msg.sender, amount);
-
-        // update shares
-        uint256 normalizedShare = _normalizeShare(amount, _stakeToken.decimals());
-        stakerShare[msg.sender] += normalizedShare;
-        totalShares += normalizedShare;
-
-        _stakers.add(msg.sender);
-
-        emit TokenStaked(amount);
     }
 
     /**
@@ -268,12 +160,12 @@ contract Staking is
         uint64 calcEndTime = uint64(Math.min(block.timestamp, rewardPool.expiresAt));
 
         // time from last distribution (if any) to end time
-        uint64 deltaTime = calcEndTime - rewardPool.lastDistributionAt;
-        if (deltaTime == 0) {
+        if (rewardPool.lastDistributionAt >= calcEndTime) {
             return 0;
         }
 
-        uint256 partialDistribution = deltaTime * rewardPool.rewardPerSecond;
+        uint256 partialDistribution = (calcEndTime - rewardPool.lastDistributionAt)
+            * rewardPool.rewardPerSecond;
 
         // reduce partial distribution to unspend amount
         if (partialDistribution > rewardPool.unspentAmount) {
@@ -282,6 +174,32 @@ contract Staking is
         }
 
         return partialDistribution * stakerShare[account] / totalShares;
+    }
+
+    /**
+     * @dev
+     * It is required to distribute rewards before executing stake
+     */
+    modifier rewardingStakeModifier(uint256 amount)
+    {
+        _distributeRewardsAndUpdateShares();
+        _;
+    }
+
+    /**
+     * @dev
+     * It is required to distribute rewards before executing stake
+     */
+    modifier rewardingWithdrawModifier()
+    {
+        _distributeRewardsAndUpdateShares();
+
+        _;
+
+        // claim rewards after rewards
+        for (uint256 p = 0; p < rewardPools.length; ++p) {
+            _claimRewards(p);
+        }
     }
 
     /**
@@ -377,15 +295,6 @@ contract Staking is
 
     /**
      * @dev
-     * Shares normalization to same base using decimals
-     */
-    function _normalizeShare(uint256 amount, uint8 decimals) internal pure returns (uint256)
-    {
-        return amount * 1000000 / 10 ** decimals;
-    }
-
-    /**
-     * @dev
      * Rewards claiming
      */
     function _claimRewards(uint256 poolIdx) internal
@@ -422,40 +331,6 @@ contract Staking is
     function claimAllRewards() public
     {
         _distributeRewardsAndUpdateShares();
-
-        for (uint256 p = 0; p < rewardPools.length; ++p) {
-            _claimRewards(p);
-        }
-    }
-
-    /**
-     * @dev
-     * Withdrawals
-     */
-    function withdraw() public
-    {
-        uint256 amount = balanceOf(msg.sender);
-        if (amount == 0) {
-            return;
-        }
-
-        _distributeRewardsAndUpdateShares();
-
-        // burn share token
-        _burn(msg.sender, amount);
-
-        // update shares
-        uint256 normalizedShare = _normalizeShare(amount, _stakeToken.decimals());
-        stakerShare[msg.sender] -= normalizedShare;
-        totalShares -= normalizedShare;
-
-        // transfer funds to account
-        _stakeToken.transfer(msg.sender, amount);
-
-        // in case sender shares are nulled no need to consider him in calculations
-        _stakers.remove(msg.sender);
-
-        emit TokenWithdrawn(amount);
 
         for (uint256 p = 0; p < rewardPools.length; ++p) {
             _claimRewards(p);
