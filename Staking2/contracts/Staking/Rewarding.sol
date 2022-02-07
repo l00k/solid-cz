@@ -34,8 +34,8 @@ abstract contract Rewarding is Base
 
     RewardPool[] public rewardPools;
 
-    mapping(address => mapping(uint256 => uint256)) private _rewardsPerTokenPaid;
-    mapping(address => mapping(uint256 => uint256)) private _distributedRewards;
+    mapping(address => mapping(uint256 => uint256)) internal _rewardsPerTokenPaid;
+    mapping(address => mapping(uint256 => uint256)) internal _distributedRewards;
 
 
 

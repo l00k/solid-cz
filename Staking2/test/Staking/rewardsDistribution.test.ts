@@ -476,19 +476,25 @@ describe('Staking / Rewards distribution', async() => {
         
         // Check state before any action
         {
-            await checkStakers('alice');
+            await checkStakers('alice', 'bob');
         }
         
-        // Alice stakes 1000
+        // Alice and Bob stakes
         {
-            const txs = await stakeTokens({ alice: tokenFormat(1000) });
+            const txs = await stakeTokens({
+                alice: tokenFormat(1000),
+                bob: tokenFormat(3000),
+            });
             await mineBlock();
             await waitForTxs(txs);
             
             // directly after staking
             // rewards are still 0 (cuz no times passed since stake) but stake is increased
-            await checkStakers('alice');
-            await checkShares({ alice: 1 });
+            await checkStakers('alice', 'bob');
+            await checkShares({
+                alice: 0.25,
+                bob: 0.75
+            });
         }
         
         // Mine next block (100 seconds later)
@@ -496,11 +502,16 @@ describe('Staking / Rewards distribution', async() => {
             await mineBlock(100);
             
             // Shares factor didn't change
-            // Still Alice has 100% shares so she should get all rewards
-            addLocalRewards({ alice: 1 }, 100);
+            addLocalRewards({
+                alice: 0.25,
+                bob: 0.75,
+            }, 100);
             
-            await checkStakers('alice');
-            await checkShares({ alice: 1 });
+            await checkStakers('alice', 'bob');
+            await checkShares({
+                alice: 0.25,
+                bob: 0.75
+            });
         }
         
         // Change pool params
@@ -513,13 +524,20 @@ describe('Staking / Rewards distribution', async() => {
             expect(result.status).to.be.equal(1);
             
             // add and check rewards using previos ratio
-            addLocalRewards({ alice: 1 }, 100);
+            addLocalRewards({
+                alice: 0.25,
+                bob: 0.75,
+            }, 100);
             
-            await checkShares({ alice: 1 });
+            await checkShares({
+                alice: 0.25,
+                bob: 0.75
+            });
             
             // update new rewards per second
             pools[0].rewardRatio = tokenFormat(1e6)
                 .sub(stakers.alice.rewards[0])
+                .sub(stakers.bob.rewards[0])
                 .div(20000);
                 
             // check reward/s in state
@@ -532,11 +550,16 @@ describe('Staking / Rewards distribution', async() => {
             await mineBlock(100);
             
             // Shares factor didn't change
-            // Still Alice has 100% shares so she should get all rewards
-            addLocalRewards({ alice: 1 }, 100);
+            addLocalRewards({
+                alice: 0.25,
+                bob: 0.75,
+            }, 100);
             
-            await checkStakers('alice');
-            await checkShares({ alice: 1 });
+            await checkStakers('alice', 'bob');
+            await checkShares({
+                alice: 0.25,
+                bob: 0.75
+            });
         }
         
         // Mine next block (20000 seconds later)
@@ -544,20 +567,189 @@ describe('Staking / Rewards distribution', async() => {
         {
             await mineBlock(20000);
             
-            addLocalRewards({ alice: 1 }, [ 19900, 19700, 700 ]);
+            addLocalRewards({
+                alice: 0.25,
+                bob: 0.75,
+            }, [ 19900, 19700, 700 ]);
             
-            await checkStakers('alice');
-            await checkShares({ alice: 1 });
+            await checkStakers('alice', 'bob');
+            await checkShares({
+                alice: 0.25,
+                bob: 0.75
+            });
         }
     });
     
     
     it('Rewards distribution after claiming rewards', async() => {
-    
+        await network.provider.send('evm_setAutomine', [ false ]);
+        
+        // Check state before any action
+        {
+            await checkStakers('alice');
+        }
+        
+        // Alice & Bob stakes
+        {
+            const txs = await stakeTokens({
+                alice: tokenFormat(1000),
+                bob: tokenFormat(3000),
+            });
+            await mineBlock();
+            await waitForTxs(txs);
+            
+            // directly after staking
+            // rewards are still 0 (cuz no times passed since stake) but stake is increased
+            await checkStakers('alice', 'bob');
+            await checkShares({
+                alice: 0.25,
+                bob: 0.75
+            });
+        }
+        
+        // Mine next block (100 seconds later)
+        {
+            await mineBlock(100);
+            
+            // Shares factor didn't change
+            addLocalRewards({
+                alice: 0.25,
+                bob: 0.75,
+            }, 100);
+            
+            await checkStakers('alice', 'bob');
+            await checkShares({
+                alice: 0.25,
+                bob: 0.75
+            });
+        }
+        
+        // Claim rewards
+        {
+            const tx = await stakingContract.connect(accounts.alice)
+                .claimAllRewards();
+            await mineBlock(100);
+            
+            const result = await tx.wait();
+            expect(result.status).to.be.equal(1);
+            
+            // distribute rewards
+            addLocalRewards({
+                alice: 0.25,
+                bob: 0.75
+            }, 100);
+            
+            // clear rewards
+            stakers.alice.rewards[0] = BigNumber.from(0);
+            stakers.alice.rewards[1] = BigNumber.from(0);
+            stakers.alice.rewards[2] = BigNumber.from(0);
+            
+            await checkShares({
+                alice: 0.25,
+                bob: 0.75
+            });
+        }
+        
+        // Mine next block (100 seconds later)
+        {
+            await mineBlock(100);
+            
+            // Shares factor didn't change
+            addLocalRewards({
+                alice: 0.25,
+                bob: 0.75,
+            }, 100);
+            
+            await checkStakers('alice', 'bob');
+            await checkShares({
+                alice: 0.25,
+                bob: 0.75
+            });
+        }
     });
     
     
     it('Rewards distribution after withdrawing', async() => {
+        await network.provider.send('evm_setAutomine', [ false ]);
+        
+        // Check state before any action
+        {
+            await checkStakers('alice');
+        }
+        
+        // Alice & Bob stakes
+        {
+            const txs = await stakeTokens({
+                alice: tokenFormat(1000),
+                bob: tokenFormat(3000),
+            });
+            await mineBlock();
+            await waitForTxs(txs);
+            
+            // directly after staking
+            // rewards are still 0 (cuz no times passed since stake) but stake is increased
+            await checkStakers('alice', 'bob');
+            await checkShares({
+                alice: 0.25,
+                bob: 0.75
+            });
+        }
+        
+        // Mine next block (100 seconds later)
+        {
+            await mineBlock(100);
+            
+            // Shares factor didn't change
+            addLocalRewards({
+                alice: 0.25,
+                bob: 0.75,
+            }, 100);
+            
+            await checkStakers('alice', 'bob');
+            await checkShares({
+                alice: 0.25,
+                bob: 0.75
+            });
+        }
+        
+        // Claim rewards
+        {
+            const tx = await stakingContract.connect(accounts.alice)
+                .withdraw();
+            await mineBlock(100);
+            
+            const result = await tx.wait();
+            expect(result.status).to.be.equal(1);
+            
+            addLocalRewards({
+                alice: 0.25,
+                bob: 0.75,
+            }, 100);
+            
+            // clear rewards & stake
+            stakers.alice.rewards[0] = BigNumber.from(0);
+            stakers.alice.rewards[1] = BigNumber.from(0);
+            stakers.alice.rewards[2] = BigNumber.from(0);
+            stakers.alice.stake = BigNumber.from(0);
+            
+            await checkStakers('alice', 'bob');
+            await checkShares({
+                bob: 1
+            });
+        }
+        
+        // Mine next block (100 seconds later)
+        {
+            await mineBlock(100);
+            
+            // Shares factor didn't change
+            addLocalRewards({ bob: 1, }, 100);
+            
+            await checkStakers('alice', 'bob');
+            await checkShares({
+                bob: 1
+            });
+        }
     
     });
     

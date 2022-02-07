@@ -3,9 +3,11 @@ pragma solidity ^0.8.0;
 
 import "./StakeLimited.sol";
 import "./Rewarding.sol";
+import "./Slashing.sol";
 
 contract Staking is
     Rewarding,
+    Slashing,
     StakeLimited
 {
 
@@ -17,6 +19,7 @@ contract Staking is
     function stake(uint256 amount) public virtual override
         limitedStakeModifier(amount)
         rewardingStakeModifier(amount)
+        slashingStakeModifier(amount)
     {
         if (amount == 0) {
             revert WrongAmount();
@@ -27,6 +30,7 @@ contract Staking is
 
     function withdraw() public virtual override
         rewardingWithdrawModifier()
+        slashingWithdrawModifier()
     {
         super.withdraw();
     }
