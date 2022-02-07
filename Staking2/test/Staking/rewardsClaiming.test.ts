@@ -23,7 +23,7 @@ type Pool = {
     tokenIdx: number,
     amount: BigNumber,
     timespan: number,
-    rewardsPerSecond: BigNumber,
+    rewardRatio: BigNumber,
 };
 
 type Staker = {
@@ -41,7 +41,7 @@ type Stakers = {
 
 
 
-describe('Staking / Withdraws', async() => {
+xdescribe('Staking / Rewards claiming', async() => {
     let accounts : Partial<Signers> = {};
     
     let tokenMain : Coin;
@@ -84,21 +84,21 @@ describe('Staking / Withdraws', async() => {
         
             const rewards = await stakingContract.rewardsOf(staker.account.address);
             for (let p = 0; p < 3; ++p) {
-                expect(rewards[p].balance).to.be.equal(staker.rewards[p]);
+                expect(rewards[p]).to.be.equal(staker.rewards[p]);
             }
         }
     }
     
     async function checkShares(shares : { [ stakerName : string ]: number })
     {
-        const totalShare = await stakingContract.totalShares();
+        const totalShare = await stakingContract.totalSupply();
         
         for (const [ stakerName, shareRatio ] of Object.entries<number>(shares)) {
             const staker = stakers[stakerName];
-            const stakerShare = await stakingContract.stakerShare(staker.account.address)
+            const stakerShare = await stakingContract.balanceOf(staker.account.address)
         
             expect(
-                stakerShare.mul(1000000).div(totalShare).toNumber() / 1000000
+                stakerShare.mul(1e6).div(totalShare).toNumber() / 1e6
             ).to.be.equal(shareRatio);
         }
     }
@@ -114,10 +114,10 @@ describe('Staking / Withdraws', async() => {
                     : time;
             
                 staker.rewards[p] = staker.rewards[p].add(
-                    pools[p].rewardsPerSecond
+                    pools[p].rewardRatio
                         .mul(poolTime)
-                        .mul(100000000000 * ratio)
-                        .div(100000000000)
+                        .mul(1e12 * ratio)
+                        .div(1e12)
                 );
             }
         }
@@ -125,7 +125,7 @@ describe('Staking / Withdraws', async() => {
     
     async function displayDetails(label : string = 'details')
     {
-        const totalShares = await stakingContract.totalShares();
+        const totalShares = await stakingContract.totalSupply();
         const block = await ethers.provider.getBlock('latest');
         
         console.log(
@@ -144,11 +144,11 @@ describe('Staking / Withdraws', async() => {
             
             const rewards = await stakingContract.rewardsOf(account.address);
             console.log("\tRewards");
-            console.log("\t\t0", rewards[0].balance.div(tokenFormat(1, 18)).toNumber());
-            console.log("\t\t1", rewards[1].balance.div(tokenFormat(1, 18)).toNumber());
-            console.log("\t\t2", rewards[2].balance.div(tokenFormat(1, 8)).toNumber());
+            console.log("\t\t0", rewards[0].div(tokenFormat(1, 18)).toNumber());
+            console.log("\t\t1", rewards[1].div(tokenFormat(1, 18)).toNumber());
+            console.log("\t\t2", rewards[2].div(tokenFormat(1, 8)).toNumber());
             
-            const share = await stakingContract.stakerShare(account.address);
+            const share = await stakingContract.balanceOf(account.address);
             console.log(
                 "\tShare",
                 share.div(tokenFormat(1, 6)).toNumber(),
@@ -179,7 +179,7 @@ describe('Staking / Withdraws', async() => {
         for (const account of Object.values(accounts)) {
             const tx = await tokenMain.connect(account).approve(
                 stakingContract.address,
-                tokenFormat(10000000)
+                tokenFormat(1e9)
             );
             await tx.wait();
         }
@@ -188,24 +188,24 @@ describe('Staking / Withdraws', async() => {
         pools = [
             {
                 tokenIdx: 0,
-                amount: tokenFormat(1000000),
+                amount: tokenFormat(1e6),
                 timespan: 10000,
                 // internal values
-                rewardsPerSecond: tokenFormat(100)
+                rewardRatio: tokenFormat(100)
             },
             {
                 tokenIdx: 1,
                 amount: tokenFormat(5000000),
                 timespan: 20000,
                 // internal values
-                rewardsPerSecond: tokenFormat(250)
+                rewardRatio: tokenFormat(250)
             },
             {
                 tokenIdx: 2,
                 amount: tokenFormat(50000, 8),
                 timespan: 1000,
                 // internal values
-                rewardsPerSecond: tokenFormat(50, 8)
+                rewardRatio: tokenFormat(50, 8)
             },
         ];
         
@@ -244,16 +244,13 @@ describe('Staking / Withdraws', async() => {
     });
     
     
-    it('Should do nothing when requesting withdrawal without stake', async() => {
-        const tx = await stakingContract.connect(accounts.alice).withdraw();
-        const result = await tx.wait();
-        
-        expect(result.status).to.be.equal(1);
-        expect(result.events.length).to.be.equal(0);
+    it('Validates pool id', async() => {
+        const tx = stakingContract.connect(accounts.alice).claimRewards(5);
+        await assertErrorMessage(tx, 'InvalidPool()');
     });
     
     
-    it('Properly transfer tokens while withdrawing with rewards', async() => {
+    it('Properly transfer tokens while claiming', async() => {
         await network.provider.send('evm_setAutomine', [ false ]);
         
         // Inital staking (25%, 25%, 50%)
@@ -267,13 +264,10 @@ describe('Staking / Withdraws', async() => {
             await waitForTxs(txs);
         }
         
-        // Alice withdraws 50% of stake
+        // Alice claims rewards
         {
             const preContractBalances = [];
             const preAliceBalances = [];
-            
-            preContractBalances.push(await tokenMain.balanceOf(stakingContract.address));
-            preAliceBalances.push(await tokenMain.balanceOf(accounts.alice.address));
             
             for (let t = 0; t < 3; ++t) {
                 preContractBalances.push(await tokenRewards[t].balanceOf(stakingContract.address));
@@ -287,50 +281,185 @@ describe('Staking / Withdraws', async() => {
                 carol: 0.5
             }, 100);
         
-            // withdraw
-            const tx = await stakingContract.connect(accounts.alice).withdraw();
+            // claim rewards
+            const tx = await stakingContract.connect(accounts.alice).claimAllRewards();
             await mineBlock(100);
             const result = await tx.wait();
             
             // check events
-            const eventTransfer = findEvent<TransferEvent>(result, 'Transfer', 1);
-            expect(eventTransfer.args.from).to.be.equal(stakingContract.address);
-            expect(eventTransfer.args.to).to.be.equal(accounts.alice.address);
-            expect(eventTransfer.args.value).to.be.equal(tokenFormat(10000));
+            for (let t = 0; t < 3; ++t) {
+                const eventClaim = findEvent<RewardsClaimedEvent>(result, 'RewardsClaimed', t);
+                expect(eventClaim.args.amount).to.be.equal(stakers.alice.rewards[t]);
             
-            for (let t = 1; t < 4; ++t) {
-                const p = t - 1;
-                
-                const eventClaim = findEvent<RewardsClaimedEvent>(result, 'RewardsClaimed', p);
-                expect(eventClaim.args.amount).to.be.equal(stakers.alice.rewards[p]);
-            
-                const eventTransfer = findEvent<TransferEvent>(result, 'Transfer', t + 1);
+                const eventTransfer = findEvent<TransferEvent>(result, 'Transfer', t);
                 expect(eventTransfer.args.from).to.be.equal(stakingContract.address);
                 expect(eventTransfer.args.to).to.be.equal(accounts.alice.address);
-                expect(eventTransfer.args.value).to.be.equal(stakers.alice.rewards[p]);
+                expect(eventTransfer.args.value).to.be.equal(stakers.alice.rewards[t]);
             }
             
             // check balances
-            const postContractBalance = await tokenMain.balanceOf(stakingContract.address);
-            const deltaContractBalance = preContractBalances[0].sub(postContractBalance);
-            expect(deltaContractBalance).to.be.equal(tokenFormat(10000));
-            
-            const postAliceBalance = await tokenMain.balanceOf(accounts.alice.address);
-            const deltaAliceBalance = postAliceBalance.sub(preAliceBalances[0]);
-            expect(deltaAliceBalance).to.be.equal(tokenFormat(10000));
-            
             for (let t = 0; t < 3; ++t) {
-                const i = t + 1;
-                
                 const postContractBalance = await tokenRewards[t].balanceOf(stakingContract.address);
-                const deltaContractBalance = preContractBalances[i].sub(postContractBalance);
+                const deltaContractBalance = preContractBalances[t].sub(postContractBalance);
                 expect(deltaContractBalance).to.be.equal(stakers.alice.rewards[t]);
                 
                 const postAliceBalance = await tokenRewards[t].balanceOf(accounts.alice.address);
-                const deltaAliceBalance = postAliceBalance.sub(preAliceBalances[i]);
+                const deltaAliceBalance = postAliceBalance.sub(preAliceBalances[t]);
                 expect(deltaContractBalance).to.be.equal(stakers.alice.rewards[t]);
             }
         }
     });
     
+    
+    it('Properly updates share factor after single rewards claiming', async() => {
+        await network.provider.send('evm_setAutomine', [ false ]);
+        
+        // Inital staking (25%, 25%, 50%)
+        {
+            const txs = await stakeTokens({
+                alice: tokenFormat(10000),
+                bob: tokenFormat(10000),
+                carol: tokenFormat(20000),
+            });
+            await mineBlock();
+            await waitForTxs(txs);
+        }
+        
+        // Mine next block (50 seconds later)
+        {
+            await mineBlock(50);
+            
+            addLocalRewards({
+                alice: 0.25,
+                bob: 0.25,
+                carol: 0.5
+            }, 50);
+            
+            await checkShares({
+                alice: 0.25,
+                bob: 0.25,
+                carol: 0.5
+            });
+        }
+        
+        // Alice claims rewards
+        {
+            const tx = await stakingContract.connect(accounts.alice).claimRewards(0);
+            await mineBlock(110);
+            const result = await tx.wait();
+            
+            expect(result.status).to.be.equal(1);
+            
+            // adjust local rewards state
+            addLocalRewards({
+                alice: 0.25,
+                bob: 0.25,
+                carol: 0.5
+            }, 110);
+            
+            stakers.alice.rewards[0] = BigNumber.from(0);
+            
+            await checkShares({
+                alice: 0.25,
+                bob: 0.25,
+                carol: 0.5
+            });
+        }
+        
+        // Mine next block (100 seconds later)
+        {
+            await mineBlock(100);
+            
+            addLocalRewards({
+                alice: 0.25,
+                bob: 0.25,
+                carol: 0.5
+            }, 100);
+            
+            await checkShares({
+                alice: 0.25,
+                bob: 0.25,
+                carol: 0.5
+            });
+            await checkStakers('alice', 'bob', 'carol');
+        }
+    });
+    
+    
+    it('Properly updates share factor after all rewards claiming', async() => {
+        await network.provider.send('evm_setAutomine', [ false ]);
+        
+        // Inital staking (25%, 25%, 50%)
+        {
+            const txs = await stakeTokens({
+                alice: tokenFormat(10000),
+                bob: tokenFormat(10000),
+                carol: tokenFormat(20000),
+            });
+            await mineBlock();
+            await waitForTxs(txs);
+        }
+        
+        // Mine next block (50 seconds later)
+        {
+            await mineBlock(50);
+            
+            addLocalRewards({
+                alice: 0.25,
+                bob: 0.25,
+                carol: 0.5
+            }, 50);
+            
+            await checkShares({
+                alice: 0.25,
+                bob: 0.25,
+                carol: 0.5
+            });
+        }
+        
+        // Alice claims rewards
+        {
+            const tx = await stakingContract.connect(accounts.alice).claimAllRewards();
+            await mineBlock(150);
+            const result = await tx.wait();
+            
+            expect(result.status).to.be.equal(1);
+            
+            // adjust local rewards state
+            addLocalRewards({
+                alice: 0.25,
+                bob: 0.25,
+                carol: 0.5
+            }, 150);
+            
+            // reflect claiming rewards
+            stakers.alice.rewards[0] = BigNumber.from(0);
+            stakers.alice.rewards[1] = BigNumber.from(0);
+            stakers.alice.rewards[2] = BigNumber.from(0);
+            
+            await checkShares({
+                alice: 0.25,
+                bob: 0.25,
+                carol: 0.5
+            });
+        }
+        
+        // Mine next block (100 seconds later)
+        {
+            await mineBlock(100);
+            
+            addLocalRewards({
+                alice: 0.25,
+                bob: 0.25,
+                carol: 0.5
+            }, 100);
+            
+            await checkShares({
+                alice: 0.25,
+                bob: 0.25,
+                carol: 0.5
+            });
+            await checkStakers('alice', 'bob', 'carol');
+        }
+    });
 });

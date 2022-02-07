@@ -15,7 +15,7 @@ type Pool = {
     tokenIdx: number,
     amount: BigNumber,
     timespan: number,
-    rewardsPerSecond: BigNumber,
+    rewardRatio: BigNumber,
 };
 
 type Staker = {
@@ -73,25 +73,25 @@ describe('Staking / Rewards distribution', async() => {
         
             const stake = await stakingContract.balanceOf(staker.account.address);
             expect(stake).to.be.equal(staker.stake);
-        
+            
             const rewards = await stakingContract.rewardsOf(staker.account.address);
             for (let p = 0; p < 3; ++p) {
-                expect(rewards[p].balance).to.be.equal(staker.rewards[p]);
+                expect(rewards[p].sub(staker.rewards[p]).toNumber()).to.be.lessThanOrEqual(1);
             }
         }
     }
     
     async function checkShares(shares : { [ stakerName : string ]: number })
     {
-        const totalShare = await stakingContract.totalShares();
+        const totalShare = await stakingContract.totalSupply();
         
         for (const [ stakerName, shareRatio ] of Object.entries<number>(shares)) {
             const staker = stakers[stakerName];
-            const stakerShare = await stakingContract.stakerShare(staker.account.address)
-        
+            const stakerShare = await stakingContract.balanceOf(staker.account.address)
+            
             expect(
-                stakerShare.mul(1000000).div(totalShare).toNumber() / 1000000
-            ).to.be.equal(shareRatio);
+                stakerShare.mul(1e6).div(totalShare).toNumber() / 1e6 - shareRatio
+            ).to.be.lessThanOrEqual(0.0001);
         }
     }
     
@@ -106,10 +106,10 @@ describe('Staking / Rewards distribution', async() => {
                     : time;
             
                 staker.rewards[p] = staker.rewards[p].add(
-                    pools[p].rewardsPerSecond
+                    pools[p].rewardRatio
                         .mul(poolTime)
-                        .mul(100000000000 * ratio)
-                        .div(100000000000)
+                        .mul(1e12 * ratio)
+                        .div(1e12)
                 );
             }
         }
@@ -117,7 +117,7 @@ describe('Staking / Rewards distribution', async() => {
     
     async function displayDetails(label : string = 'details')
     {
-        const totalShares = await stakingContract.totalShares();
+        const totalShares = await stakingContract.totalSupply();
         const block = await ethers.provider.getBlock('latest');
         
         console.log(
@@ -136,11 +136,11 @@ describe('Staking / Rewards distribution', async() => {
             
             const rewards = await stakingContract.rewardsOf(account.address);
             console.log("\tRewards");
-            console.log("\t\t0", rewards[0].balance.div(tokenFormat(1, 18)).toNumber());
-            console.log("\t\t1", rewards[1].balance.div(tokenFormat(1, 18)).toNumber());
-            console.log("\t\t2", rewards[2].balance.div(tokenFormat(1, 8)).toNumber());
+            console.log("\t\t0", rewards[0].div(tokenFormat(1, 18)).toNumber());
+            console.log("\t\t1", rewards[1].div(tokenFormat(1, 18)).toNumber());
+            console.log("\t\t2", rewards[2].div(tokenFormat(1, 8)).toNumber());
             
-            const share = await stakingContract.stakerShare(account.address);
+            const share = await stakingContract.balanceOf(account.address);
             console.log(
                 "\tShare",
                 share.div(tokenFormat(1, 6)).toNumber(),
@@ -171,7 +171,7 @@ describe('Staking / Rewards distribution', async() => {
         for (const account of Object.values(accounts)) {
             const tx = await tokenMain.connect(account).approve(
                 stakingContract.address,
-                tokenFormat(10000000)
+                tokenFormat(1e9)
             );
             await tx.wait();
         }
@@ -180,24 +180,24 @@ describe('Staking / Rewards distribution', async() => {
         pools = [
             {
                 tokenIdx: 0,
-                amount: tokenFormat(1000000),
+                amount: tokenFormat(1e6),
                 timespan: 10000,
                 // internal values
-                rewardsPerSecond: tokenFormat(100)
+                rewardRatio: tokenFormat(100)
             },
             {
                 tokenIdx: 1,
                 amount: tokenFormat(5000000),
                 timespan: 20000,
                 // internal values
-                rewardsPerSecond: tokenFormat(250)
+                rewardRatio: tokenFormat(250)
             },
             {
                 tokenIdx: 2,
                 amount: tokenFormat(50000, 8),
                 timespan: 1000,
                 // internal values
-                rewardsPerSecond: tokenFormat(50, 8)
+                rewardRatio: tokenFormat(50, 8)
             },
         ];
         
@@ -353,7 +353,7 @@ describe('Staking / Rewards distribution', async() => {
         // Alice stakes additional amount
         {
             const txs = await stakeTokens({
-                alice: tokenFormat(20000),
+                alice: tokenFormat(10000),
             });
             await mineBlock(50);
             await waitForTxs(txs);
@@ -366,14 +366,14 @@ describe('Staking / Rewards distribution', async() => {
             }, 50);
             
             // Final share ratio is
-            // Alice:   30000 + (100 + 250 + 50) * (50 + 50) * 0.25 = 40000 (40%)
-            // Bob:     10000 + (100 + 250 + 50) * (50 + 50) * 0.25 = 20000 (20%)
-            // Carol:   20000 + (100 + 250 + 50) * (50 + 50) * 0.50 = 40000 (40%)
+            // Alice:   30000 (50%)
+            // Bob:     10000 (16.667%)
+            // Carol:   20000 (33.333%)
             
             await checkShares({
                 alice: 0.4,
                 bob: 0.2,
-                carol: 0.4,
+                carol: 0.4
             });
             await checkStakers('alice', 'bob', 'carol');
         }
@@ -392,7 +392,7 @@ describe('Staking / Rewards distribution', async() => {
             await checkShares({
                 alice: 0.4,
                 bob: 0.2,
-                carol: 0.4,
+                carol: 0.4
             });
             await checkStakers('alice', 'bob', 'carol');
         }
@@ -400,29 +400,29 @@ describe('Staking / Rewards distribution', async() => {
         // 100s later new user Dave stakes
         {
             const txs = await stakeTokens({
-                dave: tokenFormat(84000),
+                dave: tokenFormat(50000),
             });
             await mineBlock(50);
             await waitForTxs(txs);
             
             // Distribute rewards using previous ratio (40%, 20%, 40%)
             addLocalRewards({
-                alice: 0.40,
-                bob: 0.20,
-                carol: 0.40,
+                alice: 0.4,
+                bob: 0.2,
+                carol: 0.4
             }, 50);
             
             // Final share ratio is
-            // Alice:   30000 + 10000 + (100 + 250 + 50) * (50 + 50) * 0.4 = 56000 (25.0%)
-            // Bob:     10000 + 10000 + (100 + 250 + 50) * (50 + 50) * 0.2 = 28000 (12.5%)
-            // Carol:   20000 + 20000 + (100 + 250 + 50) * (50 + 50) * 0.4 = 56000 (25.0%)
-            // Dave:    84000 = 84000 (37.5%)
+            // Alice:   20000 (20%)
+            // Bob:     10000 (10%)
+            // Carol:   20000 (20%)
+            // Dave:    50000 (50%)
             
             await checkShares({
-                alice: 0.25,
-                bob: 0.125,
-                carol: 0.25,
-                dave: 0.375
+                alice: 0.2,
+                bob: 0.1,
+                carol: 0.2,
+                dave: 0.5
             });
             await checkStakers('alice', 'bob', 'carol', 'dave');
         }
@@ -433,17 +433,17 @@ describe('Staking / Rewards distribution', async() => {
             
             // Shares factor didn't change
             addLocalRewards({
-                alice: 0.25,
-                bob: 0.125,
-                carol: 0.25,
-                dave: 0.375
+                alice: 0.2,
+                bob: 0.1,
+                carol: 0.2,
+                dave: 0.5
             }, 100);
             
             await checkShares({
-                alice: 0.25,
-                bob: 0.125,
-                carol: 0.25,
-                dave: 0.375
+                alice: 0.2,
+                bob: 0.1,
+                carol: 0.2,
+                dave: 0.5
             });
             await checkStakers('alice', 'bob', 'carol', 'dave');
         }
@@ -454,17 +454,17 @@ describe('Staking / Rewards distribution', async() => {
             await mineBlock(10000);
             
             addLocalRewards({
-                alice: 0.25,
-                bob: 0.125,
-                carol: 0.25,
-                dave: 0.375
+                alice: 0.2,
+                bob: 0.1,
+                carol: 0.2,
+                dave: 0.5
             }, [ 9700, 10000, 700 ]);
             
             await checkShares({
-                alice: 0.25,
-                bob: 0.125,
-                carol: 0.25,
-                dave: 0.375
+                alice: 0.2,
+                bob: 0.1,
+                carol: 0.2,
+                dave: 0.5
             });
             await checkStakers('alice', 'bob', 'carol', 'dave');
         }
@@ -505,11 +505,8 @@ describe('Staking / Rewards distribution', async() => {
         
         // Change pool params
         {
-            const tx = await stakingContract.connect(accounts.owner).modifyRewardPool(
-                0,
-                20000
-            );
-            
+            const tx = await stakingContract.connect(accounts.owner)
+                .modifyRewardPool(0, 20000);
             await mineBlock(100);
             
             const result = await tx.wait();
@@ -521,13 +518,13 @@ describe('Staking / Rewards distribution', async() => {
             await checkShares({ alice: 1 });
             
             // update new rewards per second
-            pools[0].rewardsPerSecond = tokenFormat(1000000)
+            pools[0].rewardRatio = tokenFormat(1e6)
                 .sub(stakers.alice.rewards[0])
                 .div(20000);
                 
             // check reward/s in state
             const rewardPool = await stakingContract.rewardPools(0);
-            expect(rewardPool.rewardPerSecond).to.be.equal(pools[0].rewardsPerSecond);
+            expect(rewardPool.rewardRatio).to.be.equal(pools[0].rewardRatio);
         }
         
         // Mine next block (100 seconds later)
@@ -552,6 +549,16 @@ describe('Staking / Rewards distribution', async() => {
             await checkStakers('alice');
             await checkShares({ alice: 1 });
         }
+    });
+    
+    
+    it('Rewards distribution after claiming rewards', async() => {
+    
+    });
+    
+    
+    it('Rewards distribution after withdrawing', async() => {
+    
     });
     
 });
