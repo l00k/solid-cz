@@ -19,18 +19,14 @@ contract Staking is
         rewardingStakeModifier(amount)
         slashingStakeModifier(amount)
     {
-        if (amount == 0) {
-            revert WrongAmount();
-        }
-
-        super.stake(amount);
+        Base.stake(amount);
     }
 
     function withdraw() public virtual override
         rewardingWithdrawModifier()
         slashingWithdrawModifier()
     {
-        super.withdraw();
+        Base.withdraw();
     }
 
 }

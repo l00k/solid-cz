@@ -10,7 +10,7 @@ contract Base is
     Ownable
 {
 
-    error WrongAmount();
+    error InvalidArgument();
     error InsufficientAllowance(uint256 required, uint256 actual);
 
     event TokenStaked(uint256 amount);
@@ -30,7 +30,7 @@ contract Base is
     function stake(uint256 amount) public virtual
     {
         if (amount == 0) {
-            revert WrongAmount();
+            revert InvalidArgument();
         }
 
         // check current allowance

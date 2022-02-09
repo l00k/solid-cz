@@ -100,7 +100,7 @@ xdescribe('Staking / Management', async() => {
                 tokenFormat(10000),
                 month
             );
-            await assertErrorMessage(tx, `InsufficientBalance(${tokenFormat(10000)}, ${tokenFormat(1000)})`);
+            await assertErrorMessage(tx, `InsufficientAllowance(${tokenFormat(10000)}, ${tokenFormat(1000)})`);
         }
         
         // approve more tokens to contract

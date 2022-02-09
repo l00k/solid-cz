@@ -41,7 +41,7 @@ type Stakers = {
 
 
 
-xdescribe('Staking / Rewards claiming', async() => {
+describe('Staking / Rewards claiming', async() => {
     let accounts : Partial<Signers> = {};
     
     let tokenMain : ExtERC20;
@@ -82,24 +82,24 @@ xdescribe('Staking / Rewards claiming', async() => {
             const stake = await stakingContract.balanceOf(staker.account.address);
             expect(stake).to.be.equal(staker.stake);
         
-            const rewards = await stakingContract.rewardsOf(staker.account.address);
             for (let p = 0; p < 3; ++p) {
+                const rewards = await stakingContract.claimableRewardsOf(p, staker.account.address);
                 expect(rewards[p].balance).to.be.equal(staker.rewards[p]);
             }
         }
     }
     
-    async function checkShares(shares : { [ stakerName : string ]: number })
+    async function checkShares(shares : { [ stakerName : string ]: number[] })
     {
-        const totalShare = await stakingContract.totalShares();
-        
-        for (const [ stakerName, shareRatio ] of Object.entries<number>(shares)) {
-            const staker = stakers[stakerName];
-            const stakerShare = await stakingContract.stakerShare(staker.account.address)
-        
-            expect(
-                stakerShare.mul(1000000).div(totalShare).toNumber() / 1000000
-            ).to.be.equal(shareRatio);
+        for (const [ stakerName, shareRatios ] of Object.entries<number[]>(shares)) {
+            for (let pid = 0; pid < shareRatios.length; ++pid) {
+                const staker = stakers[stakerName];
+                const stakerShare = await stakingContract.stakerShareRatio(pid, staker.account.address)
+            
+                expect(
+                    Number(stakerShare.toString()) / 1e18
+                ).to.be.equal(shareRatios[pid]);
+            }
         }
     }
     
@@ -125,7 +125,6 @@ xdescribe('Staking / Rewards claiming', async() => {
     
     async function displayDetails(label : string = 'details')
     {
-        const totalShares = await stakingContract.totalShares();
         const block = await ethers.provider.getBlock('latest');
         
         console.log(
@@ -133,7 +132,6 @@ xdescribe('Staking / Rewards claiming', async() => {
         );
         
         for (const [name, account] of Object.entries(accounts)) {
-            
             const stake = await stakingContract.balanceOf(account.address);
             if (Number(stake.toString()) == 0) {
                 continue;
@@ -148,12 +146,14 @@ xdescribe('Staking / Rewards claiming', async() => {
             console.log("\t\t1", rewards[1].balance.div(tokenFormat(1, 18)).toNumber());
             console.log("\t\t2", rewards[2].balance.div(tokenFormat(1, 8)).toNumber());
             
-            const share = await stakingContract.stakerShare(account.address);
-            console.log(
-                "\tShare",
-                share.div(tokenFormat(1, 6)).toNumber(),
-                (Number(share.toString()) / Number(totalShares.toString()) * 100).toFixed(1) + '%'
-            );
+            for (const [pid] of Object.entries(rewardPools)) {
+                const share = await stakingContract.stakerShareRatio(pid, account.address);
+                console.log(
+                    "\tShare",
+                    share.div(tokenFormat(1, 6)).toNumber(),
+                    (Number(share.toString()) / 1e16).toFixed(1) + '%'
+                );
+            }
         }
         
         console.log();

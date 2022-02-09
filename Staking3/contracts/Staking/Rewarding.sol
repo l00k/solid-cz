@@ -9,7 +9,6 @@ import "./Base.sol";
 abstract contract Rewarding is Base
 {
 
-    error InvalidArgument();
     error ExpiredPool();
     error AlreadyStarted();
 
@@ -132,6 +131,15 @@ abstract contract Rewarding is Base
         }
     }
 
+
+    /**
+     * Views
+     */
+    function stakerShareRatio(uint256 pid, address account) public view returns(uint256)
+    {
+        RewardPool storage rewardPool = rewardPools[pid];
+        return rewardPool.shares[account] * 1e18 / rewardPool.totalShares;
+    }
 
     /**
      * Modifiers
