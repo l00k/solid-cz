@@ -6,8 +6,18 @@ import "@openzeppelin/contracts/utils/math/Math.sol";
 import "./Base.sol";
 
 
+import "hardhat/console.sol";
+
+
+
 abstract contract Rewarding is Base
 {
+
+    // Add this extra time to reward pool time
+    // in order to prevent unspent rewards left in pool
+    // Rewards distribution is capped with pool unspent amount so no security issue here
+    uint public constant EXTRA_TIME = 100;
+
 
     error ExpiredPool();
     error AlreadyStarted();
@@ -26,7 +36,7 @@ abstract contract Rewarding is Base
         uint64 timespan;
         uint64 expiresAt;
 
-        uint256 rewardsRatio;
+        uint256 rewardsRate;
 
         mapping(address => uint256) shares;
         uint256 totalShares;
@@ -38,7 +48,9 @@ abstract contract Rewarding is Base
 
     bool public started = false;
 
-    RewardPool[] public rewardPools;
+    uint256 rewardPoolsCount = 0;
+    mapping (uint256 => RewardPool) public rewardPools;
+
     uint64 public rewardPoolsUpdatedAt;
 
 
@@ -70,19 +82,19 @@ abstract contract Rewarding is Base
         token.transferFrom(msg.sender, address(this), amount);
 
         // create new pool
-        uint256 rewardsRatio = amount / timespan;
+        uint256 rewardsRate = amount / timespan;
 
-        uint256 pid = rewardPools.length;
+        uint256 pid = rewardPoolsCount++;
         RewardPool storage rewardPool = rewardPools[pid];
 
         rewardPool.token = token;
         rewardPool.unspentAmount = amount;
         rewardPool.timespan = timespan;
-        rewardPool.expiresAt = uint64(block.timestamp + timespan);
-        rewardPool.rewardsRatio = rewardsRatio;
+        rewardPool.expiresAt = uint64(block.timestamp + timespan + EXTRA_TIME);
+        rewardPool.rewardsRate = rewardsRate;
 
         emit RewardPoolCreated(
-            rewardPools.length - 1,
+            pid,
             rewardToken,
             amount,
             timespan
@@ -98,8 +110,8 @@ abstract contract Rewarding is Base
         }
 
         // recalculate reward per second
-        rewardPool.rewardsRatio = rewardPool.unspentAmount / timespan;
-        rewardPool.expiresAt = uint64(block.timestamp + timespan);
+        rewardPool.rewardsRate = rewardPool.unspentAmount / timespan;
+        rewardPool.expiresAt = uint64(block.timestamp + timespan + EXTRA_TIME);
 
         emit RewardPoolModified(pid, rewardPool.unspentAmount, timespan);
     }
@@ -111,7 +123,7 @@ abstract contract Rewarding is Base
         if (timespan == 0) {
             revert InvalidArgument();
         }
-        if (pid >= rewardPools.length) {
+        if (pid >= rewardPoolsCount) {
             revert InvalidArgument();
         }
 
@@ -126,19 +138,9 @@ abstract contract Rewarding is Base
             revert InvalidArgument();
         }
 
-        for (uint256 pid = 0; pid < rewardPools.length; ++pid) {
+        for (uint256 pid = 0; pid < rewardPoolsCount; ++pid) {
             _modifyRewardPool(pid, timespan);
         }
-    }
-
-
-    /**
-     * Views
-     */
-    function stakerShareRatio(uint256 pid, address account) public view returns(uint256)
-    {
-        RewardPool storage rewardPool = rewardPools[pid];
-        return rewardPool.shares[account] * 1e18 / rewardPool.totalShares;
     }
 
     /**
@@ -161,6 +163,10 @@ abstract contract Rewarding is Base
     modifier rewardingStakeModifier(uint256 amount)
     {
         _updateRewardPools();
+        _enterRewardPools(msg.sender, amount);
+
+        started = true;
+
         _;
     }
 
@@ -170,11 +176,42 @@ abstract contract Rewarding is Base
         _;
 
         // claim rewards after rewards
-        for (uint256 p = 0; p < rewardPools.length; ++p) {
-            _claimRewards(p);
+        for (uint256 pid = 0; pid < rewardPoolsCount; ++pid) {
+            _claimRewards(pid);
         }
     }
 
+    /**
+     *
+     */
+    function _enterRewardPools(address account, uint256 amount) internal
+    {
+        for (uint256 pid = 0; pid < rewardPoolsCount; ++pid) {
+            RewardPool storage rewardPool = rewardPools[pid];
+
+            uint256 share;
+            if (rewardPool.accumulator == 0) {
+                share = amount;
+            }
+            else {
+                share = amount * rewardPool.totalShares / rewardPool.accumulator;
+            }
+
+            rewardPool.shares[account] += share;
+            rewardPool.totalShares += share;
+
+            rewardPool.accumulator += amount;
+        }
+    }
+
+    function _normalizeShare(
+        uint256 amount,
+        uint8 decimals
+    ) public pure returns (uint256)
+    {
+        uint256 pow = 10 ** (24 - decimals);
+        return amount * pow;
+    }
 
     /**
      * Update reward pool
@@ -187,13 +224,20 @@ abstract contract Rewarding is Base
             return;
         }
 
-        uint64 deltaTime = rewardPoolsUpdatedAt - uint64(block.timestamp);
+        if (rewardPoolsUpdatedAt == 0) {
+            rewardPoolsUpdatedAt = uint64(block.timestamp);
+            return;
+        }
+
+        uint64 endTime = uint64(Math.min(rewardPool.expiresAt, block.timestamp));
+        uint64 deltaTime = endTime - rewardPoolsUpdatedAt;
         if (deltaTime == 0) {
             return;
         }
 
-        uint256 distribution = deltaTime * rewardPool.rewardsRatio;
+        uint256 distribution = deltaTime * rewardPool.rewardsRate;
         if (distribution > rewardPool.unspentAmount) {
+            // reduce distribution to unspent amount limit
             distribution = rewardPool.unspentAmount;
         }
 
@@ -203,11 +247,37 @@ abstract contract Rewarding is Base
 
     function _updateRewardPools() internal
     {
-        for (uint256 pid = 0; pid < rewardPools.length; ++pid) {
+        for (uint256 pid = 0; pid < rewardPoolsCount; ++pid) {
             _updateRewardPool(pid);
         }
 
         rewardPoolsUpdatedAt = uint64(block.timestamp);
+    }
+
+
+    /**
+     * Staker views
+     */
+    function stakerShare(
+        uint256 pid,
+        address account
+    ) public view returns(uint256)
+    {
+        RewardPool storage rewardPool = rewardPools[pid];
+        return rewardPool.shares[account];
+    }
+
+    function stakerShareRatio(
+        uint256 pid,
+        address account
+    ) public view returns(uint256)
+    {
+        RewardPool storage rewardPool = rewardPools[pid];
+        if (rewardPool.accumulator == 0) {
+            return 0;
+        }
+
+        return rewardPool.shares[account] * 1e18 / rewardPool.totalShares;
     }
 
 
@@ -221,10 +291,27 @@ abstract contract Rewarding is Base
     {
         RewardPool storage rewardPool = rewardPools[pid];
 
-        uint256 totalEarned = rewardPool.shares[account] * rewardPool.accumulator / rewardPool.totalShares;
+        uint256 tempAccumulator = rewardPool.accumulator;
 
-        return totalEarned - rewardPool.claimedAmount[account];
+        uint64 endTime = uint64(Math.min(rewardPool.expiresAt, block.timestamp));
+        uint64 deltaTime = endTime - rewardPoolsUpdatedAt;
+        if (deltaTime > 0) {
+            uint256 distribution = rewardPool.rewardsRate * deltaTime;
+            if (distribution > rewardPool.unspentAmount) {
+                distribution = rewardPool.unspentAmount;
+            }
+
+            tempAccumulator += distribution;
+        }
+
+        uint256 totalClaimable = rewardPool.totalShares > 0
+            ? rewardPool.shares[account] * tempAccumulator / rewardPool.totalShares
+            : rewardPool.shares[account];
+        uint256 totalRewards = totalClaimable - balanceOf(account);
+
+        return totalRewards - rewardPool.claimedAmount[account];
     }
+
 
     function _claimRewards(uint256 pid) internal virtual
     {
@@ -235,6 +322,8 @@ abstract contract Rewarding is Base
             return;
         }
 
+        rewardPool.claimedAmount[msg.sender] += amount;
+
         rewardPool.token.transfer(msg.sender, amount);
 
         emit RewardsClaimed(pid, address(rewardPool.token), amount);
@@ -243,7 +332,7 @@ abstract contract Rewarding is Base
     function claimRewards(uint256 pid) public
         updateRewards
     {
-        if (pid > rewardPools.length) {
+        if (pid > rewardPoolsCount) {
             revert InvalidArgument();
         }
 
@@ -253,7 +342,7 @@ abstract contract Rewarding is Base
     function claimAllRewards() public
         updateRewards
     {
-        for (uint256 p = 0; p < rewardPools.length; ++p) {
+        for (uint256 p = 0; p < rewardPoolsCount; ++p) {
             _claimRewards(p);
         }
     }

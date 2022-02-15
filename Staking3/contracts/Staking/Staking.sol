@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import "./StakeLimited.sol";
+import "./Base.sol";
 import "./RewardingWithSlash.sol";
+import "./StakeLimited.sol";
 
 contract Staking is
+    Base,
     RewardingWithSlash,
     StakeLimited
 {

@@ -4,7 +4,7 @@ import { ContractReceipt } from '@ethersproject/contracts/src.ts/index';
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
 import chai, { expect } from 'chai';
 import chaiSubset from 'chai-subset';
-import { BigNumber, BigNumberish, ContractTransaction, Event } from 'ethers';
+import { BaseContract, BigNumber, BigNumberish, ContractTransaction, Event } from 'ethers';
 import { ethers, network } from 'hardhat';
 
 chai.use(chaiSubset);
@@ -41,11 +41,13 @@ export function findEvent<T extends Event> (result : ContractReceipt, eventName 
     return <any>events[offset];
 }
 
+
 export async function timetravel (seconds : number) : Promise<any>
 {
     await network.provider.send('evm_increaseTime', [ seconds ]);
     return network.provider.send('evm_mine');
 }
+
 
 export async function mineBlock (delay : number = 10) : Promise<Block>
 {
@@ -55,6 +57,22 @@ export async function mineBlock (delay : number = 10) : Promise<Block>
     await network.provider.send('evm_mine');
     return ethers.provider.getBlock('latest');
 }
+
+
+export type AccountCallback = (account : SignerWithAddress) => Promise<ContractTransaction>;
+
+export async function assertIsAvailableOnlyForOwner(callback : AccountCallback)
+{
+    const { owner, alice } = await getSigners();
+
+    const nonOwnerTx = callback(alice);
+    await assertErrorMessage(nonOwnerTx, 'Ownable: caller is not the owner');
+
+    const ownerTx = await callback(owner);
+    const result = await ownerTx.wait();
+    expect(result.status).to.be.equal(1);
+}
+
 
 export async function assertErrorMessage (
     tx : Promise<ContractTransaction>,
@@ -72,10 +90,12 @@ export async function assertErrorMessage (
     );
 }
 
+
 export function tokenFormat (amount : BigNumberish, decimals : number = 18) : BigNumber
 {
     return BigNumber.from(amount).mul(BigNumber.from(10).pow(decimals));
 }
+
 
 type TxCheckCallback = (tx : ContractTransaction, reciept : ContractReceipt) => void;
 

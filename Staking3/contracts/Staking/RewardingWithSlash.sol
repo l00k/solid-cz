@@ -17,7 +17,7 @@ abstract contract RewardingWithSlash is Rewarding
 
 
     uint64 public minimalStakeTime = 7 days;
-    uint256 public slashRatePermill = 1e5;
+    uint256 public slashRatePermill = 0;
 
     mapping(address => StakeRecord[]) public stakeRecords;
 
@@ -45,8 +45,11 @@ abstract contract RewardingWithSlash is Rewarding
     ) public view override returns (uint256)
     {
         uint256 claimableRewards = Rewarding.claimableRewardsOf(pid, account);
-        uint256 slashRate = calcSlashRate(account);
+        if (claimableRewards == 0 || slashRatePermill == 0) {
+            return claimableRewards;
+        }
 
+        uint256 slashRate = calcSlashRate(account);
         return claimableRewards * (1e18 - slashRate) / 1e18;
     }
 
@@ -68,6 +71,10 @@ abstract contract RewardingWithSlash is Rewarding
             }
 
             totalStakeAmount += records[i].amount;
+        }
+
+        if (totalStakeAmount == 0) {
+            return 0;
         }
 
         // (stakeAmountToSlash / totalStakeAmount) * (slashRatePermill / 1e6) * 1e18
@@ -109,7 +116,9 @@ abstract contract RewardingWithSlash is Rewarding
 
     modifier slashingWithdrawModifier()
     {
-        _slashRewards();
+        if (slashRatePermill > 0) {
+            _slashRewards();
+        }
 
         _;
 
@@ -125,7 +134,7 @@ abstract contract RewardingWithSlash is Rewarding
             return;
         }
 
-        for (uint pid = 0; pid < rewardPools.length; ++pid) {
+        for (uint pid = 0; pid < rewardPoolsCount; ++pid) {
             uint256 claimableRewards = Rewarding.claimableRewardsOf(pid, msg.sender);
             if (claimableRewards == 0) {
                 continue;
