@@ -83,25 +83,6 @@ abstract contract RewardingWithSlash is Rewarding
 
 
     /**
-     * Modified version of rewards claiming
-     * Rewards are reduced by potential slash rate
-     */
-    function _claimRewards(uint256 pid) internal override
-    {
-        RewardPool storage rewardPool = rewardPools[pid];
-
-        uint256 claimableRewards = claimableRewardsOf(pid, msg.sender);
-        if (claimableRewards == 0) {
-            return;
-        }
-
-        rewardPool.token.transfer(msg.sender, claimableRewards);
-
-        emit RewardsClaimed(pid, address(rewardPool.token), claimableRewards);
-    }
-
-
-    /**
      * Modifiers
      */
     modifier slashingStakeModifier(uint256 amount)

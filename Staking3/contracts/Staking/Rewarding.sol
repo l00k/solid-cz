@@ -42,8 +42,6 @@ abstract contract Rewarding is Base
         uint256 totalShares;
 
         uint256 accumulator;
-
-        mapping(address => uint256) claimedAmount;
     }
 
     bool public started = false;
@@ -156,13 +154,13 @@ abstract contract Rewarding is Base
 
     modifier updateRewards()
     {
-        _updateRewardPools();
+        _updateAllRewardPools();
         _;
     }
 
     modifier rewardingStakeModifier(uint256 amount)
     {
-        _updateRewardPools();
+        _updateAllRewardPools();
         _enterRewardPools(msg.sender, amount);
 
         started = true;
@@ -172,7 +170,7 @@ abstract contract Rewarding is Base
 
     modifier rewardingWithdrawModifier()
     {
-        _updateRewardPools();
+        _updateAllRewardPools();
         _;
 
         // claim rewards after rewards
@@ -213,6 +211,34 @@ abstract contract Rewarding is Base
         return amount * pow;
     }
 
+
+    /**
+     * Calculate updated accumulator
+     */
+    function _calcUpdatedAccumulator(uint256 pid) internal view returns (uint256, uint256)
+    {
+        RewardPool storage rewardPool = rewardPools[pid];
+
+        uint256 accumulator = rewardPool.accumulator;
+
+        uint64 endTime = uint64(Math.min(rewardPool.expiresAt, block.timestamp));
+        uint64 deltaTime = endTime - rewardPoolsUpdatedAt;
+
+        if (deltaTime == 0) {
+            return (accumulator, 0);
+        }
+
+        uint256 distribution = rewardPool.rewardsRate * deltaTime;
+        if (distribution > rewardPool.unspentAmount) {
+            // reduce distribution to unspent amount limit
+            distribution = rewardPool.unspentAmount;
+        }
+
+        accumulator += distribution;
+
+        return (accumulator, distribution);
+    }
+
     /**
      * Update reward pool
      */
@@ -229,23 +255,13 @@ abstract contract Rewarding is Base
             return;
         }
 
-        uint64 endTime = uint64(Math.min(rewardPool.expiresAt, block.timestamp));
-        uint64 deltaTime = endTime - rewardPoolsUpdatedAt;
-        if (deltaTime == 0) {
-            return;
-        }
-
-        uint256 distribution = deltaTime * rewardPool.rewardsRate;
-        if (distribution > rewardPool.unspentAmount) {
-            // reduce distribution to unspent amount limit
-            distribution = rewardPool.unspentAmount;
-        }
-
-        rewardPool.accumulator += distribution;
+        // update accumulator based on time delta
+        (uint256 accumulator, uint256 distribution) = _calcUpdatedAccumulator(pid);
+        rewardPool.accumulator = accumulator;
         rewardPool.unspentAmount -= distribution;
     }
 
-    function _updateRewardPools() internal
+    function _updateAllRewardPools() internal
     {
         for (uint256 pid = 0; pid < rewardPoolsCount; ++pid) {
             _updateRewardPool(pid);
@@ -284,32 +300,32 @@ abstract contract Rewarding is Base
     /**
      * Rewards claiming
      */
+    function withdrawableOf(
+        uint256 pid,
+        address account
+    ) public view returns (uint256)
+    {
+        RewardPool storage rewardPool = rewardPools[pid];
+
+        (uint256 accumulator,) = _calcUpdatedAccumulator(pid);
+        uint256 withdrawable = rewardPool.totalShares > 0
+            ? rewardPool.shares[account] * accumulator / rewardPool.totalShares
+            : rewardPool.shares[account];
+
+        return withdrawable;
+    }
+
     function claimableRewardsOf(
         uint256 pid,
         address account
     ) public view virtual returns (uint256)
     {
-        RewardPool storage rewardPool = rewardPools[pid];
-
-        uint256 tempAccumulator = rewardPool.accumulator;
-
-        uint64 endTime = uint64(Math.min(rewardPool.expiresAt, block.timestamp));
-        uint64 deltaTime = endTime - rewardPoolsUpdatedAt;
-        if (deltaTime > 0) {
-            uint256 distribution = rewardPool.rewardsRate * deltaTime;
-            if (distribution > rewardPool.unspentAmount) {
-                distribution = rewardPool.unspentAmount;
-            }
-
-            tempAccumulator += distribution;
+        uint256 withdrawable = withdrawableOf(pid, account);
+        if (balanceOf(account) > withdrawable) {
+            return 0;
         }
 
-        uint256 totalClaimable = rewardPool.totalShares > 0
-            ? rewardPool.shares[account] * tempAccumulator / rewardPool.totalShares
-            : rewardPool.shares[account];
-        uint256 totalRewards = totalClaimable - balanceOf(account);
-
-        return totalRewards - rewardPool.claimedAmount[account];
+        return withdrawable - balanceOf(account);
     }
 
 
@@ -322,8 +338,13 @@ abstract contract Rewarding is Base
             return;
         }
 
-        rewardPool.claimedAmount[msg.sender] += amount;
+        // update shares
+        (uint256 accumulator,) = _calcUpdatedAccumulator(pid);
+        uint256 sharesDelta = amount * rewardPool.totalShares / accumulator;
+        rewardPool.shares[msg.sender] -= sharesDelta;
+        rewardPool.totalShares -= sharesDelta;
 
+        // transfer rewards
         rewardPool.token.transfer(msg.sender, amount);
 
         emit RewardsClaimed(pid, address(rewardPool.token), amount);

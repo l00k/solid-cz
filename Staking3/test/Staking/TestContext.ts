@@ -3,6 +3,7 @@ import { RewardPoolCreatedEvent, Staking } from '@/Staking';
 import { ContractReceipt } from '@ethersproject/contracts/src.ts/index';
 import { expect } from 'chai';
 import colors from 'colors';
+import Decimal from 'decimal.js';
 import { BigNumber, ContractTransaction } from 'ethers';
 import { ethers } from 'hardhat';
 import {
@@ -51,6 +52,14 @@ export type StakerState = {
     staked : BigNumber,
     claimableRewards : RewardPoolMap<BigNumber>,
 };
+
+
+function compareBigNumbers(a : BigNumber, b : BigNumber, digits : number = 6): boolean
+{
+    const delta = a.sub(b).div(BigNumber.from(10).pow(digits));
+    return delta.toNumber() == 0;
+}
+
 
 
 export class TestContext
@@ -136,7 +145,7 @@ export class TestContext
             // verify claimable rewards
             for (const [pid, rewardPool] of Object.entries(this.rewardPools)) {
                 const rewards = await this.stakingContract.claimableRewardsOf(pid, account.address);
-                expect(rewards).to.be.equal(accountState.claimableRewards[pid]);
+                expect(compareBigNumbers(rewards, accountState.claimableRewards[pid])).to.be.true;
             }
         }
     }
@@ -285,8 +294,8 @@ export class TestContext
                 stakerState.claimableRewards[pid] = stakerState.claimableRewards[pid].add(
                     rewardPool.rewardsRate
                         .mul(poolTime)
-                        .mul(BigNumber.from(Math.round(1e12 * ratio)).mul(1e6))
-                        .div(BigNumber.from(10).pow(18))
+                        .mul( (new Decimal(10)).pow(18).mul(ratio).toString() )
+                        .div( BigNumber.from(10).pow(18) )
                 );
             }
         }
