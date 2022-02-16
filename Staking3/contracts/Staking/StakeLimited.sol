@@ -12,16 +12,11 @@ abstract contract StakeLimited is Base
     error StakeAboveMaximal(uint256 max);
 
     event StakeLimitsChanged(uint256 totalStakeLimit, uint256 minStakePerAccount, uint256 maxStakePerAccount);
-    event EarlyWithdrawalParamsChanged(uint256 minStakeTime, uint32 earlyWithdrawalSlashRatePermill);
-
 
 
     uint256 public totalStakeLimit = 0;
     uint256 public minStakePerAccount = 0;
     uint256 public maxStakePerAccount = 0;
-
-    uint256 public minStakeTime = 0;
-    uint32 public earlyWithdrawalSlashRatePermill = 0;
 
 
     /**
@@ -39,21 +34,6 @@ abstract contract StakeLimited is Base
         maxStakePerAccount = maxStakePerAccount_;
 
         emit StakeLimitsChanged(totalStakeLimit, minStakePerAccount, maxStakePerAccount);
-    }
-
-    /**
-     * @dev
-     * Change early withdrawal params
-     */
-    function changeEarlyWithdrawalParams(
-        uint256 minStakeTime_,
-        uint32 earlyWithdrawalSlashRatePermill_
-    ) public onlyOwner
-    {
-        minStakeTime = minStakeTime_;
-        earlyWithdrawalSlashRatePermill = earlyWithdrawalSlashRatePermill_;
-
-        emit EarlyWithdrawalParamsChanged(minStakeTime, earlyWithdrawalSlashRatePermill);
     }
 
     /**

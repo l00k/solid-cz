@@ -98,7 +98,6 @@ abstract contract RewardingWithSlash is Rewarding
             return 0;
         }
 
-        // (stakeAmountToSlash / totalStakeAmount) * (slashRatePermill / 1e6) * 1e18
         return stakeAmountToSlash * slashRatePermill * 1e12 / totalStakeAmount;
     }
 

@@ -262,16 +262,6 @@ abstract contract Rewarding is Base
     }
 
 
-    function _normalizeShare(
-        uint256 amount,
-        uint8 decimals
-    ) public pure returns (uint256)
-    {
-        uint256 pow = 10 ** (24 - decimals);
-        return amount * pow;
-    }
-
-
     /**
      * Calculate updated accumulator
      */

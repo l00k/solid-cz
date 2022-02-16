@@ -5,7 +5,7 @@ import { mineBlock, tokenFormat } from '../helpers/utils';
 import { TestContext } from './TestContext';
 
 
-describe('Users limit verification', async() => {
+xdescribe('Users limit verification', async() => {
     let owner : SignerWithAddress;
     let alice : SignerWithAddress;
     let bob : SignerWithAddress;
