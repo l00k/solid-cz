@@ -6,7 +6,7 @@ import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
 import { expect } from 'chai';
 import { BigNumber, BigNumberish, ContractTransaction } from 'ethers';
 import { ethers, network } from 'hardhat';
-import { assertErrorMessage, tokenFormat } from './utils';
+import { assertErrorMessage, compareBigNumbers, tokenFormat } from './utils';
 
 
 export type ElementType<T extends ReadonlyArray<unknown>> = T extends ReadonlyArray<infer ElementType>
@@ -87,16 +87,22 @@ export abstract class BaseTestContext
             const accountState : AccountState = this.accountsState[accountName];
 
             for (const tokenName of Object.keys(this.tokenConfigs)) {
+                const decimals = Math.round(this.tokenConfigs[tokenName].decimals / 2);
                 const balance = await this.tokenContracts[tokenName].balanceOf(account.address);
-                expect(balance).to.be.equal(accountState.balances[tokenName]);
+                compareBigNumbers(
+                    accountState.balances[tokenName],
+                    balance,
+                    decimals,
+                    `${tokenName} balance of ${accountName}`
+                );
             }
         }
     }
     
     public async executeInSingleBlock (
-        callback : () => Promise<Promise<any>[]|void>,
+        callback : () => Promise<Promise<ContractTransaction>[]|void>,
         nextBlockDelay : number = 10
-    ): Promise<any>
+    ): Promise<ContractTransaction[]|void>
     {
         await network.provider.send('evm_setAutomine', [ false ]);
         
@@ -106,7 +112,11 @@ export abstract class BaseTestContext
         await network.provider.send('evm_setAutomine', [ true ]);
         
         if (promises) {
-            return Promise.allSettled(promises);
+            const txs = [];
+            for (const promise of promises) {
+                txs.push(await promise);
+            }
+            return txs;
         }
     }
 

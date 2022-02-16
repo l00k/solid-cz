@@ -97,6 +97,23 @@ export function tokenFormat (amount : BigNumberish, decimals : number = 18) : Bi
 }
 
 
+export function compareBigNumbers(
+    expected : BigNumberish,
+    actual : BigNumberish,
+    digits : number = 8,
+    desc : string = ''
+)
+{
+    const delta = BigNumber.from(expected.toString())
+        .sub(BigNumber.from(actual.toString()))
+        .div(BigNumber.from(10).pow(digits));
+    
+    if (delta.toString() != '0') {
+        expect.fail(`BigNumbers don't match\n\tE: ${expected.toString()}\n\tA: ${actual.toString()}\n${digits} digits\n${desc}`);
+    }
+}
+
+
 type TxCheckCallback = (tx : ContractTransaction, reciept : ContractReceipt) => void;
 
 export async function waitForTxs (txs : ContractTransaction[], checkCallback? : TxCheckCallback): Promise<ContractReceipt[]>

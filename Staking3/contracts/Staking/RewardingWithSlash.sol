@@ -4,9 +4,13 @@ pragma solidity ^0.8.0;
 import "./Rewarding.sol";
 
 
+import "hardhat/console.sol";
+
+
 abstract contract RewardingWithSlash is Rewarding
 {
 
+    event SlashingParamsChanged(uint64 minimalStakeTime, uint256 slashRatePermill);
     event RewardsSlashed(uint256 poolIdx, uint256 amount);
 
 
@@ -32,6 +36,8 @@ abstract contract RewardingWithSlash is Rewarding
     {
         minimalStakeTime = minimalStakeTime_;
         slashRatePermill = slashRatePermill_;
+
+        emit SlashingParamsChanged(minimalStakeTime, slashRatePermill);
     }
 
 
@@ -50,6 +56,24 @@ abstract contract RewardingWithSlash is Rewarding
         }
 
         uint256 slashRate = calcSlashRate(account);
+        return claimableRewards * (1e18 - slashRate) / 1e18;
+    }
+
+    function slashableRewardsOf(
+        uint256 pid,
+        address account
+    ) public view returns (uint256)
+    {
+        uint256 slashRate = calcSlashRate(account);
+        if (slashRate == 0) {
+            return 0;
+        }
+
+        uint256 claimableRewards = Rewarding.claimableRewardsOf(pid, account);
+        if (claimableRewards == 0) {
+            return 0;
+        }
+
         return claimableRewards * (1e18 - slashRate) / 1e18;
     }
 
@@ -97,40 +121,38 @@ abstract contract RewardingWithSlash is Rewarding
 
     modifier slashingWithdrawModifier()
     {
-        if (slashRatePermill > 0) {
-            _slashRewards();
-        }
-
         _;
+
+        if (slashRatePermill > 0) {
+            _moveSlashedAmountToPool();
+        }
 
         // delete stake records
         delete stakeRecords[msg.sender];
     }
 
 
-    function _slashRewards() internal
+    function _moveSlashedAmountToPool() internal
     {
-        uint256 slashRate = calcSlashRate(msg.sender);
-        if (slashRate == 0) {
-            return;
-        }
 
         for (uint pid = 0; pid < rewardPoolsCount; ++pid) {
-            uint256 claimableRewards = Rewarding.claimableRewardsOf(pid, msg.sender);
-            if (claimableRewards == 0) {
+            RewardPool storage rewardPool = rewardPools[pid];
+
+            if (rewardPool.totalShares == 0) {
                 continue;
             }
 
-            RewardPool storage rewardPool = rewardPools[pid];
+            uint256 valueLeft = rewardPool.shares[msg.sender] * rewardPool.accumulator / rewardPool.totalShares;
 
-            // reduce rewards
-            uint256 slashAmount = claimableRewards * (1e18 - slashRate) / 1e18;
-            claimableRewards -= slashAmount;
+            // clear shares
+            rewardPool.totalShares -= rewardPool.shares[msg.sender];
+            rewardPool.shares[msg.sender] = 0;
 
-            // move slashed amount to pool balance
-            rewardPool.unspentAmount += slashAmount;
+            // move value left to pool
+            rewardPool.accumulator -= valueLeft;
+            rewardPool.unspentAmount += valueLeft;
 
-            emit RewardsSlashed(pid, slashAmount);
+            emit RewardsSlashed(pid, valueLeft);
         }
     }
 

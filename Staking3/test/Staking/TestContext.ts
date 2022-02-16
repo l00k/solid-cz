@@ -15,7 +15,7 @@ import {
     ElementType,
     TokenConfig
 } from '../helpers/BaseTestContext';
-import { findEvent, tokenFormat } from '../helpers/utils';
+import { compareBigNumbers, findEvent, tokenFormat } from '../helpers/utils';
 
 
 
@@ -54,19 +54,12 @@ export type StakerState = {
 };
 
 
-function compareBigNumbers(a : BigNumber, b : BigNumber, digits : number = 6): boolean
-{
-    const delta = a.sub(b).div(BigNumber.from(10).pow(digits));
-    return delta.toNumber() == 0;
-}
-
-
 
 export class TestContext
     extends BaseTestContext
 {
     
-    protected tokenConfigs : TokenMap<TokenConfig> = {
+    public tokenConfigs : TokenMap<TokenConfig> = {
         staking: {
             name: '4soft Defi Training',
             symbol: 'DST',
@@ -144,8 +137,15 @@ export class TestContext
             
             // verify claimable rewards
             for (const [pid, rewardPool] of Object.entries(this.rewardPools)) {
+                const tokenConfig = this.tokenConfigs[rewardPool.rewardTokenName];
+                const decimals = Math.round(tokenConfig.decimals / 2);
                 const rewards = await this.stakingContract.claimableRewardsOf(pid, account.address);
-                expect(compareBigNumbers(rewards, accountState.claimableRewards[pid])).to.be.true;
+                compareBigNumbers(
+                    accountState.claimableRewards[pid],
+                    rewards,
+                    decimals,
+                    `${tokenConfig.name} claimable of ${accountName}`
+                );
             }
         }
     }
@@ -167,9 +167,10 @@ export class TestContext
                 const currentRatio = Number(stakerShare.toString()) / 1e18;
                 
                 // strip some digits
-                expect(
-                    (currentRatio - ratio) * 1e12
-                ).to.be.lessThanOrEqual(1);
+                if ((currentRatio - ratio) * 1e12 > 1) {
+                    const desc = `Staker: ${stakerName}`;
+                    expect.fail(`Ratios didn't match\n\tE: ${ratio.toString()}\n\tA: ${currentRatio.toString()}\n${desc}`);
+                }
             }
         }
     }
@@ -309,40 +310,39 @@ export class TestContext
             colors.red('### ' + label),
         );
         
-        for (const [ name, account ] of Object.entries(this.accounts)) {
-            const stake = await this.stakingContract.balanceOf(account.address);
-            if (Number(stake.toString()) == 0) {
-                continue;
-            }
+        for (const pid in this.rewardPools) {
+            const rewardPoolState = await this.stakingContract.rewardPools(pid);
+            console.log(colors.magenta(`Reward pool #${pid}`));
+            console.log(
+                `Shares:\t\t${rewardPoolState.totalShares}\n` +
+                `Accmul:\t\t${rewardPoolState.accumulator}`
+            );
             
-            console.log(colors.green(name));
-            console.log('\tStake', stake.div(tokenFormat(1, 18)).toNumber());
-            
-            // console.log('\tRewards');
-            // for (const pid in this.rewardPools) {
-            //     const rewardPool = this.rewardPools[pid];
-            //     const tokenConfig = this.tokenConfigs[rewardPool.rewardTokenName];
-            //
-            //     const rewards = await this.stakingContract.claimableRewardsOf(pid, account.address);
-            //     console.log(
-            //         `\t\t${pid}\t`,
-            //         rewards.div(tokenFormat(1, tokenConfig.decimals)).toNumber()
-            //     );
-            // }
-            
-            console.log('\tShares');
-            for (const pid in this.rewardPools) {
-                const rewardPool = this.rewardPools[pid];
-                const tokenConfig = this.tokenConfigs[rewardPool.rewardTokenName];
+            const rewardPool = this.rewardPools[pid];
+            const tokenConfig = this.tokenConfigs[rewardPool.rewardTokenName];
+        
+            for (const [ name, account ] of Object.entries(this.accounts)) {
+                const stake = await this.stakingContract.balanceOf(account.address);
+                if (Number(stake.toString()) == 0) {
+                    continue;
+                }
+                
+                console.log(colors.green(`${name}`));
+                console.log('\tStake\t', stake.div(tokenFormat(1, 18)).toNumber());
                 
                 const shareRatio = await this.stakingContract.stakerShareRatio(pid, account.address);
                 const share = await this.stakingContract.stakerShare(pid, account.address);
-                
                 console.log(
-                    `\t\t${pid}\t`,
-                    (Number(shareRatio.div(1e12).toString()) / 1e4).toFixed(1).padStart(10, ' ') + '%',
+                    '\tShares\t',
+                    Number(share.div(BigNumber.from(10).pow(17)).toString()) / 10,
                     "\t",
-                    Number(share.div(BigNumber.from(10).pow(12)).toString()) / 1.e6,
+                    (Number(shareRatio.div(1e12).toString()) / 1e4).toFixed(5).padStart(10, ' ') + ' %',
+                );
+                
+                const rewards = await this.stakingContract.claimableRewardsOf(pid, account.address);
+                console.log(
+                    '\tRewards\t',
+                    rewards.div(tokenFormat(1, tokenConfig.decimals)).toNumber()
                 );
             }
         }

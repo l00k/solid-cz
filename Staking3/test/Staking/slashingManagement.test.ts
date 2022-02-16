@@ -1,4 +1,4 @@
-import { EarlyWithdrawalParamsChangedEvent } from '@/Staking';
+import { SlashingParamsChangedEvent } from '@/Staking';
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
 import { expect } from 'chai';
 import { ethers } from 'hardhat';
@@ -13,7 +13,6 @@ const month = 30 * day;
 xdescribe('Slashing management', async() => {
     let owner : SignerWithAddress;
     let testContext : TestContext;
-    
     
     
     beforeEach(async() => {
@@ -32,7 +31,7 @@ xdescribe('Slashing management', async() => {
         await assertIsAvailableOnlyForOwner(async(account) => {
             return testContext.stakingContract
                 .connect(account)
-                .changeEarlyWithdrawalParams(
+                .changeSlashingParams(
                     1000,
                     10 ** 4
                 );
@@ -42,7 +41,7 @@ xdescribe('Slashing management', async() => {
     it('Should properly change early withdrawals params', async() => {
         const tx = await testContext.stakingContract
             .connect(owner)
-            .changeEarlyWithdrawalParams(
+            .changeSlashingParams(
                 1000,
                 10 ** 4
             );
@@ -50,15 +49,15 @@ xdescribe('Slashing management', async() => {
         expect(result.status).to.be.equal(1);
         
         // check event
-        const event = findEvent<EarlyWithdrawalParamsChangedEvent>(result, 'EarlyWithdrawalParamsChanged');
-        expect(event.args.minStakeTime).to.be.equal(1000);
-        expect(event.args.earlyWithdrawalSlashRatePermill).to.be.equal(10 ** 4);
+        const event = findEvent<SlashingParamsChangedEvent>(result, 'SlashingParamsChanged');
+        expect(event.args.minimalStakeTime).to.be.equal(1000);
+        expect(event.args.slashRatePermill).to.be.equal(10 ** 4);
         
         // check state
-        const minStakeTime = await testContext.stakingContract.minStakeTime();
-        expect(minStakeTime).to.be.equal(1000);
+        const minimalStakeTime = await testContext.stakingContract.minimalStakeTime();
+        expect(minimalStakeTime).to.be.equal(1000);
         
-        const earlyWithdrawalSlashRatePermill = await testContext.stakingContract.earlyWithdrawalSlashRatePermill();
-        expect(earlyWithdrawalSlashRatePermill).to.be.equal(10 ** 4);
+        const slashRatePermill = await testContext.stakingContract.slashRatePermill();
+        expect(slashRatePermill).to.be.equal(10 ** 4);
     });
 });

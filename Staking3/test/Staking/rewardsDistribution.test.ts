@@ -7,7 +7,7 @@ import { TestContext } from './TestContext';
 
 
 
-describe('Rewards distribution', async() => {
+xdescribe('Rewards distribution', async() => {
     let owner : SignerWithAddress;
     let alice : SignerWithAddress;
     let bob : SignerWithAddress;
@@ -32,7 +32,7 @@ describe('Rewards distribution', async() => {
 
     
     
-    xit('Should properly distribute token for single staker', async() => {
+    it('Should properly distribute token for single staker', async() => {
         await testContext.createRewardPool(
             'rewardA',
             tokenFormat(1000000), // 100 ups
@@ -128,7 +128,7 @@ describe('Rewards distribution', async() => {
     });
 
 
-    xit('Should properly share rewards', async() => {
+    it('Should properly share rewards', async() => {
         await testContext.createRewardPool(
             'rewardA',
             tokenFormat(1000000), // 100 ups
@@ -268,7 +268,7 @@ describe('Rewards distribution', async() => {
         }
 
         // Mine next block (10000 seconds later)
-        // Pool 2 and 3 expired
+        // Pool 1 expired
         {
             await mineBlock(10000);
 
@@ -277,7 +277,7 @@ describe('Rewards distribution', async() => {
                 bob:    [ 0.09, 1/9 ],
                 carol:  [ 0.18, 2/9 ],
                 dave:   [ 0.40, 1/3 ],
-            }, [ 9700, 10000, 700 ]);
+            }, [ 9500, 10000 ]);
 
             await testContext.verifyShares({
                 alice:  [ 0.33, 1/3 ],
@@ -290,7 +290,7 @@ describe('Rewards distribution', async() => {
     });
 
 
-    xit('Rewards distribution after pool change', async() => {
+    it('Rewards distribution after pool change', async() => {
         await testContext.createRewardPool(
             'rewardA',
             tokenFormat(1000000), // 100 ups
@@ -422,7 +422,7 @@ describe('Rewards distribution', async() => {
     });
 
     
-    xit('Rewards distribution after claiming rewards', async() => {
+    it('Rewards distribution after claiming rewards', async() => {
         await testContext.createRewardPool(
             'rewardA',
             tokenFormat(1000000), // 100 ups
@@ -504,7 +504,7 @@ describe('Rewards distribution', async() => {
         {
             await testContext.executeInSingleBlock(async() => {
                 return await testContext.stakeTokens({
-                    carol: tokenFormat(70000),
+                    carol: tokenFormat(65000),
                 });
             }, 50);
 
@@ -574,12 +574,49 @@ describe('Rewards distribution', async() => {
             }, 100);
 
             // clear rewards & stake
-            testContext.accountsState.alice.claimableRewards[0] = BigNumber.from(0);
-            testContext.accountsState.alice.staked = BigNumber.from(0);
+            const aliceState = testContext.accountsState.alice;
+            
+            aliceState.balances.rewardA = aliceState.balances.rewardA.add(aliceState.claimableRewards[0]);
+            aliceState.claimableRewards[0] = BigNumber.from(0);
+            
+            aliceState.balances.staking = aliceState.balances.staking.add(aliceState.staked);
+            aliceState.staked = BigNumber.from(0);
+            
 
             await testContext.verifyAccountsState('alice', 'bob');
             await testContext.verifyShares({
                 bob: 1
+            });
+        }
+
+        // Mine next block (50 seconds later)
+        {
+            await mineBlock(50);
+
+            // Shares factor didn't change
+            testContext.localDistributeRewards({ bob: 1, }, 50);
+
+            await testContext.verifyAccountsState('alice', 'bob');
+            await testContext.verifyShares({
+                alice: 0,
+                bob: 1
+            });
+        }
+        
+        // Alice stakes again
+        {
+            await testContext.executeInSingleBlock(async() => {
+                return await testContext.stakeTokens({
+                    alice: tokenFormat(55000),
+                });
+            }, 50);
+
+            // Shares factor didn't change
+            testContext.localDistributeRewards({ bob: 1, }, 50);
+
+            await testContext.verifyShares({
+                alice:  0.5,
+                bob:    0.5,
             });
         }
 
@@ -588,11 +625,15 @@ describe('Rewards distribution', async() => {
             await mineBlock(100);
 
             // Shares factor didn't change
-            testContext.localDistributeRewards({ bob: 1, }, 100);
+            testContext.localDistributeRewards({
+                alice:  0.5,
+                bob:    0.5,
+            }, 100);
 
             await testContext.verifyAccountsState('alice', 'bob');
             await testContext.verifyShares({
-                bob: 1
+                alice:  0.5,
+                bob:    0.5,
             });
         }
     });
