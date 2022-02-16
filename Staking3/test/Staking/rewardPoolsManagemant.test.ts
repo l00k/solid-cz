@@ -9,8 +9,10 @@ import { RewardPool, TestContext } from './TestContext';
 const day = 24 * 3600;
 const month = 30 * day;
 
+const EXTRA_TIME = 100;
 
-xdescribe('Reward pools management', async() => {
+
+describe('Reward pools management', async() => {
     let owner : SignerWithAddress;
     let alice : SignerWithAddress;
     let bob : SignerWithAddress;
@@ -199,7 +201,7 @@ xdescribe('Reward pools management', async() => {
                 expect(rewardPools.token).to.be.equal(testContext.tokenContracts.rewardA.address);
                 expect(rewardPools.unspentAmount).to.be.equal(tokenFormat(10000));
                 expect(rewardPools.rewardsRate).to.be.equal(tokenFormat(10000).div(month));
-                expect(rewardPools.expiresAt).to.be.equal(block.timestamp + month);
+                expect(rewardPools.expiresAt).to.be.equal(block.timestamp + month + EXTRA_TIME);
                 expect(rewardPools.timespan).to.be.equal(month);
             }
         });
@@ -253,7 +255,7 @@ xdescribe('Reward pools management', async() => {
             
             // expired pool
             {
-                await mineBlock(1001);
+                await mineBlock(1101);
                 
                 const tx = testContext.stakingContract
                     .connect(owner)
@@ -300,7 +302,7 @@ xdescribe('Reward pools management', async() => {
                 
                 expect(rewardPoolState.unspentAmount).to.be.equal(tokenFormat(1000));
                 expect(rewardPoolState.rewardsRate).to.be.equal(tokenFormat(1000).div(1000));
-                expect(rewardPoolState.expiresAt).to.be.equal(block.timestamp + 1000);
+                expect(rewardPoolState.expiresAt).to.be.equal(block.timestamp + 1000 + EXTRA_TIME);
                 expect(rewardPoolState.timespan).to.be.equal(1000);
             }
         });

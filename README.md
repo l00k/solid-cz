@@ -16,7 +16,9 @@ DeFi Staking sample. Bad implemenation sample - using loops over all accounts to
 --
 #### ./Staking2
 Modified version - no compounding. Similar to Synthetix StakingRewards  
+It is possible to add new reward pool after staking started.
   
 --
 #### ./Staking3
-Modified version. Similar to SushiBar
+Modified version. SushiBar based reward pools.
+Beacuse of SushiBar there is compounding, but it is less flexible in management - no option to start new reward pool.

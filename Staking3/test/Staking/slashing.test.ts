@@ -18,7 +18,7 @@ type RewardPoolState = {
 }
 
 
-xdescribe('Slashing', async() => {
+describe('Slashing', async() => {
     let owner : SignerWithAddress;
     let alice : SignerWithAddress;
     

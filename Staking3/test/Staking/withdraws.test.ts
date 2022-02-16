@@ -8,7 +8,7 @@ import { TestContext } from './TestContext';
 
 
 
-xdescribe('Withdrawing', async() => {
+describe('Withdrawing', async() => {
     let owner : SignerWithAddress;
     let alice : SignerWithAddress;
     

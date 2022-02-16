@@ -5,7 +5,7 @@ import { assertErrorMessage, tokenFormat } from '../helpers/utils';
 import { TestContext } from './TestContext';
 
 
-xdescribe('Limited staking', async() => {
+describe('Limited staking', async() => {
     let owner : SignerWithAddress;
     let alice : SignerWithAddress;
     let bob : SignerWithAddress;

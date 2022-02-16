@@ -5,7 +5,7 @@ import { mineBlock, tokenFormat } from '../helpers/utils';
 import { TestContext } from './TestContext';
 
 
-xdescribe('Users limit verification', async() => {
+describe('Users limit verification', async() => {
     let owner : SignerWithAddress;
     let alice : SignerWithAddress;
     let bob : SignerWithAddress;
@@ -87,7 +87,7 @@ xdescribe('Users limit verification', async() => {
                 const result = await tx.wait();
                 expect(result.status).to.be.equal(1);
                 
-                expect(result.gasUsed.toNumber()).to.be.lessThanOrEqual(400000);
+                expect(result.gasUsed.toNumber()).to.be.lessThanOrEqual(500000);
             }
         }
     });

@@ -10,7 +10,7 @@ const day = 24 * 3600;
 const month = 30 * day;
 
 
-xdescribe('Slashing management', async() => {
+describe('Slashing management', async() => {
     let owner : SignerWithAddress;
     let testContext : TestContext;
     

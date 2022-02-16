@@ -6,7 +6,7 @@ import { assertErrorMessage, findEvent, tokenFormat } from '../helpers/utils';
 import { TestContext } from './TestContext';
 
 
-xdescribe('Basic staking actions', async() => {
+describe('Basic staking actions', async() => {
     let owner : SignerWithAddress;
     let alice : SignerWithAddress;
     
