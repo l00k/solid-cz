@@ -6,12 +6,19 @@ import "@openzeppelin/contracts/utils/math/Math.sol";
 import "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
 import "./Base.sol";
 
+import "hardhat/console.sol";
+
 
 abstract contract Rewarding is Base
 {
     using EnumerableSet for EnumerableSet.AddressSet;
 
+
     error ExpiredPool();
+    error AlreadyAssigned();
+
+
+    event AssignedToPool(uint256 pid, address staker);
 
     event RewardPoolCreated(uint256 pid, address rewardToken, uint256 amount, uint256 timespan);
     event RewardPoolModified(uint256 pid, uint256 amount, uint256 timespan);
@@ -146,10 +153,12 @@ abstract contract Rewarding is Base
 
         if (rewardPools[pid].shares[staker] > 0) {
             // this account has existing share in new pool - skip
-            return;
+            revert AlreadyAssigned();
         }
 
         _enterRewardPool(pid, staker, stake);
+
+        emit AssignedToPool(pid, staker);
     }
 
     function assignMeToNewPool(uint256 pid) public
@@ -187,7 +196,7 @@ abstract contract Rewarding is Base
     ) public view returns(uint256)
     {
         RewardPool storage rewardPool = rewardPools[pid];
-        if (rewardPool.accumulator == 0) {
+        if (rewardPool.totalShares == 0) {
             return 0;
         }
 
@@ -298,6 +307,11 @@ abstract contract Rewarding is Base
 
         uint256 accumulator = rewardPool.accumulator;
 
+        // don't spend funds until first stake
+        if (rewardPool.totalShares == 0) {
+            return (accumulator, 0);
+        }
+
         uint64 deltaTime = uint64(block.timestamp) - rewardPoolsUpdatedAt;
         if (deltaTime == 0) {
             return (accumulator, 0);
@@ -329,9 +343,10 @@ abstract contract Rewarding is Base
 
         // update accumulator based on time delta
         (uint256 accumulator, uint256 distribution) = _calcUpdatedAccumulator(pid);
-
-        rewardPool.accumulator = accumulator;
-        rewardPool.unspentAmount -= distribution;
+        if (distribution > 0) {
+            rewardPool.accumulator = accumulator;
+            rewardPool.unspentAmount -= distribution;
+        }
     }
 
     function _updateAllRewardPools() internal
