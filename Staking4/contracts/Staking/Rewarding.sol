@@ -6,8 +6,6 @@ import "@openzeppelin/contracts/utils/math/Math.sol";
 import "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
 import "./Base.sol";
 
-import "hardhat/console.sol";
-
 
 abstract contract Rewarding is Base
 {
