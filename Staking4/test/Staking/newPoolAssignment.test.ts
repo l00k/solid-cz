@@ -7,7 +7,7 @@ import { TestContext } from './TestContext';
 
 
 
-describe('Rewards distribution', async() => {
+describe('New reward pool assignment', async() => {
     let owner : SignerWithAddress;
     let alice : SignerWithAddress;
     let bob : SignerWithAddress;
@@ -57,7 +57,25 @@ describe('Rewards distribution', async() => {
             20000
         );
         
-        // additional stake to first pool
+        // check new pool
+        {
+            const rewardPool = await testContext.stakingContract.rewardPools(newRewardPool.pid);
+            expect(rewardPool.totalShares).to.be.eq(0);
+            
+            // Should not have share in new pool
+            for (const accountName of [ 'alice', 'bob' ]) {
+                const account = testContext.accounts[accountName];
+                
+                const stakerShare = await testContext.stakingContract
+                    .stakerShareRatio(
+                        newRewardPool.pid,
+                        account.address
+                    );
+                expect(stakerShare).to.be.equal(0);
+            }
+        }
+        
+        // additional stake
         {
             const currentBlock = await ethers.provider.getBlock('latest');
             const time = 100 - (currentBlock.timestamp - initalBlock.timestamp);
@@ -78,18 +96,14 @@ describe('Rewards distribution', async() => {
             await testContext.verifyShares({
                 alice:  [ 0.2, 0 ],
                 bob:    [ 0.3, 0 ],
-                carol:  [ 0.5, 0 ]
+                carol:  [ 0.5, 1 ]
             });
         }
         
         // check new pool
         {
-            const rewardPool = await testContext.stakingContract.rewardPools(newRewardPool.pid);
-            
-            expect(rewardPool.totalShares).to.be.eq(0);
-            
             // Should not have share in new pool
-            for (const accountName of [ 'alice', 'bob', 'carol' ]) {
+            for (const accountName of [ 'alice', 'bob' ]) {
                 const account = testContext.accounts[accountName];
                 
                 const stakerShare = await testContext.stakingContract
