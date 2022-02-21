@@ -22,9 +22,12 @@ It is possible to add new reward pool after staking started.
 #### ./Staking3
 Modified version. SushiBar based reward pools.
 Beacuse of SushiBar there is compounding, but it is less flexible in management - no option to start new reward pool.
-
   
 --
 #### ./Staking4
 Improved Staking3 version.
 Allows manual assignments to new reward pools.
+  
+--
+#### ./NftToken
+NFT implementation sample.
