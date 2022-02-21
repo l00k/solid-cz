@@ -1,14 +1,9 @@
-import { NftToken } from '@/NftToken';
-import { BaseURIChangedEvent } from '@/SampleToken';
+import { SampleToken, BaseURIChangedEvent } from '@/SampleToken';
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
 import { expect } from 'chai';
 import { ethers } from 'hardhat';
-import { assertErrorMessage, assertIsAvailableOnlyForOwner, findEvent, mineBlock, tokenFormat } from '../helpers/utils';
+import { assertIsAvailableOnlyForOwner, findEvent, txExec } from '../helpers/utils';
 import { TestContext } from './TestContext';
-
-
-const day = 24 * 3600;
-const month = 30 * day;
 
 
 describe('Management', async() => {
@@ -20,7 +15,7 @@ describe('Management', async() => {
     let eva : SignerWithAddress;
     
     let testContext : TestContext;
-    let nftToken : NftToken;
+    let nftToken : SampleToken;
     
     
     
@@ -42,29 +37,33 @@ describe('Management', async() => {
             
             const symbol = await nftToken.symbol();
             expect(symbol).to.be.equal('STK');
+            
+            const baseURI = await nftToken.baseURI();
+            expect(baseURI).to.be.equal('https://example.com/');
+            
+            const maxSupply = await nftToken.maxSupply();
+            expect(maxSupply).to.be.equal(1000);
         });
         
     });
     
     describe('Change base URI', async() => {
+        const newURL = 'https://other.eth/t/';
         
         it('Should allow to execute only by owner', async() => {
             await assertIsAvailableOnlyForOwner(async(account) => {
                 return nftToken
                     .connect(account)
-                    .changeBaseURI('https://other.eth/t/');
+                    .changeBaseURI(newURL);
             });
         });
         
         it('Should properly change base URI', async() => {
-            const newURL = 'https://other.eth/t/';
-        
-            const tx = await nftToken
-                .connect(owner)
-                .changeBaseURI(newURL);
-            const result = await tx.wait();
-            
-            expect(result.status).to.be.equal(1);
+            const [ tx, result ] = await txExec(
+                nftToken
+                    .connect(owner)
+                    .changeBaseURI(newURL)
+            );
             
             const event : BaseURIChangedEvent = findEvent(result, 'BaseURIChanged');
             expect(event.args.baseURI).to.be.equal(newURL);

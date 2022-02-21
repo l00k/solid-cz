@@ -61,12 +61,26 @@ export async function mineBlock (delay : number = 10) : Promise<Block>
 
 export type AccountCallback = (account : SignerWithAddress) => Promise<ContractTransaction>;
 
-export async function assertIsAvailableOnlyForOwner(callback : AccountCallback)
+export async function assertIsAvailableOnlyForOwner(
+    callback : AccountCallback,
+    ownerOverride? : SignerWithAddress,
+    errorMessage : string = 'Ownable: caller is not the owner'
+)
 {
-    const { owner, alice } = await getSigners();
+    let { owner, alice, bob, carol, dave, eva } = await getSigners();
+    
+    if (ownerOverride) {
+        owner = ownerOverride;
+    }
 
-    const nonOwnerTx = callback(alice);
-    await assertErrorMessage(nonOwnerTx, 'Ownable: caller is not the owner');
+    const nonOwnerAccounts = [ owner, alice, bob, carol, dave, eva ]
+        .filter(account => account.address != owner.address)
+        .slice(0, 2);
+
+    for (const account of nonOwnerAccounts) {
+        const nonOwnerTx = callback(account);
+        await assertErrorMessage(nonOwnerTx, errorMessage);
+    }
 
     const ownerTx = await callback(owner);
     const result = await ownerTx.wait();
@@ -132,4 +146,14 @@ export async function waitForTxs (txs : ContractTransaction[], checkCallback? : 
     }
     
     return results;
+}
+
+export async function txExec (txPromise : Promise<ContractTransaction>): Promise<[ ContractTransaction, ContractReceipt ]>
+{
+    const tx = await txPromise;
+    const result = await tx.wait();
+    
+    expect(result.status).to.be.equal(1);
+    
+    return [ tx, result ];
 }

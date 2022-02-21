@@ -6,9 +6,10 @@ import "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
 import "@openzeppelin/contracts/token/ERC721/extensions/IERC721Metadata.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/Address.sol";
+import "@openzeppelin/contracts/utils/Strings.sol";
 
 
-contract NftToken is
+contract NFToken is
     IERC721,
     IERC721Metadata,
     Ownable
@@ -18,7 +19,7 @@ contract NftToken is
 
     error InvalidArgument();
     error RecipientNotAccepted(address recipient);
-    error TransferNotAllowed(uint256 tokenId);
+    error NotAllowed(uint256 tokenId);
     error NotTokenOwner(uint256 tokenId);
     error TokenNotExist(uint256 tokenId);
 
@@ -31,8 +32,9 @@ contract NftToken is
 
 
     struct Token {
-        string URI;
+        string name;
         uint256 features;
+        uint64 createdAt;
     }
 
 
@@ -101,7 +103,11 @@ contract NftToken is
     function tokenURI(uint256 tokenId) public view override returns (string memory)
     {
         Token storage token = tokens[tokenId];
-        return string(abi.encodePacked(_baseURI, token.URI));
+
+        bytes32 hash = keccak256(abi.encode(
+            token.features
+        ));
+        return Strings.toHexString(uint256(hash), 32);
     }
 
     /**
@@ -141,6 +147,18 @@ contract NftToken is
      * @dev Mints new token.
      * Allowed only to contract owner
      */
+    function safeMint(
+        address to,
+        Token calldata token
+    ) external
+        onlyOwner
+    {
+        _safeMint(
+            to,
+            token
+        );
+    }
+
     function mint(
         address to,
         Token calldata token
@@ -155,7 +173,7 @@ contract NftToken is
 
     /**
      * @dev Burns existing token
-     * Allowed only to token owner
+     * Allowed only to token owner or operator
      */
     function burn(uint256 tokenId) external
     {
@@ -249,9 +267,9 @@ contract NftToken is
         }
     }
 
-    function _verifyTokenOwner(uint256 tokenId, address owner) internal view
+    function _verifyTokenOwner(uint256 tokenId, address spender) internal view
     {
-        if (owner != ownerOf(tokenId)) {
+        if (spender != ownerOf(tokenId)) {
             revert NotTokenOwner(tokenId);
         }
     }
@@ -260,7 +278,7 @@ contract NftToken is
     {
         address owner = ownerOf(tokenId);
 
-        if (owner == msg.sender) {
+        if (owner == spender) {
             return;
         }
         else if (getApproved(tokenId) == spender) {
@@ -270,7 +288,7 @@ contract NftToken is
             return;
         }
 
-        revert TransferNotAllowed(tokenId);
+        revert NotAllowed(tokenId);
     }
 
     function _verifyTokenRecievementAllowed(
@@ -345,11 +363,13 @@ contract NftToken is
     function _mint(
         address to,
         Token calldata token
-    ) internal returns (uint256)
+    ) internal virtual returns (uint256)
     {
         // create token
         tokens.push(token);
         uint256 tokenId = tokens.length - 1;
+
+        tokens[tokenId].createdAt = uint64(block.timestamp);
 
         _owners[tokenId] = to;
         ++_balances[to];
@@ -359,15 +379,11 @@ contract NftToken is
         return tokenId;
     }
 
-
-    function _burn(uint256 tokenId) internal
+    function _burn(uint256 tokenId) internal virtual
     {
         address owner = ownerOf(tokenId);
 
-        _owners[tokenId] = address(0);
-
-        // clear allowance
-        _allowance[tokenId] = address(0);
+        _transfer(owner, address(0), tokenId);
 
         emit Burned(owner, tokenId);
     }

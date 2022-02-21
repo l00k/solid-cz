@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import "./NftToken.sol";
+import "./NFToken.sol";
 
-abstract contract Sale is NftToken
+abstract contract Sale is NFToken
 {
 
     error TokenNotForSale(uint256 tokenId);
