@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import "./NFToken.sol";
-import "./Sale.sol";
-import "./Limited.sol";
+import "./NFToken/NFToken.sol";
+import "./NFToken/Sale.sol";
+import "./NFToken/Limited.sol";
 
 
 contract SampleToken is
