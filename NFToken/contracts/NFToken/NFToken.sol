@@ -21,9 +21,9 @@ contract NFToken is
 
     error InvalidArgument();
     error ZeroAddressNotAllowed();
-    error RecipientNotAccepted(address recipient);
+    error RecipientNotAccepted();
     error NotAllowed();
-    error NotTokenOwner();
+    error FromIsNotTokenOwner();
     error TokenNotExist();
 
 
@@ -197,9 +197,9 @@ contract NFToken is
         uint256 tokenId
     ) public override
     {
-        _verifyNonZeroAddress(to);
         _verifyTokenExists(tokenId);
         _verifyAllowance(tokenId, msg.sender);
+        _verifyNonZeroAddress(to);
 
         _safeTransfer(from, to, tokenId, "");
     }
@@ -211,9 +211,9 @@ contract NFToken is
         bytes calldata data
     ) public override
     {
-        _verifyNonZeroAddress(to);
         _verifyTokenExists(tokenId);
         _verifyAllowance(tokenId, msg.sender);
+        _verifyNonZeroAddress(to);
 
         _safeTransfer(from, to, tokenId, data);
     }
@@ -228,9 +228,9 @@ contract NFToken is
         uint256 tokenId
     ) external override
     {
-        _verifyNonZeroAddress(to);
         _verifyTokenExists(tokenId);
         _verifyAllowance(tokenId, msg.sender);
+        _verifyNonZeroAddress(to);
 
         _transfer(from, to, tokenId);
     }
@@ -278,10 +278,10 @@ contract NFToken is
         }
     }
 
-    function _verifyTokenOwner(uint256 tokenId, address spender) internal view
+    function _verifyFromIsTokenOwner(uint256 tokenId, address spender) internal view
     {
         if (spender != ownerOf(tokenId)) {
-            revert NotTokenOwner();
+            revert FromIsNotTokenOwner();
         }
     }
 
@@ -312,12 +312,12 @@ contract NFToken is
         if (to.isContract()) {
             try IERC721Receiver(to).onERC721Received(from, to, tokenId, _data) returns (bytes4 retval) {
                 if (retval != IERC721Receiver.onERC721Received.selector) {
-                    revert RecipientNotAccepted(to);
+                    revert RecipientNotAccepted();
                 }
             }
             catch (bytes memory reason) {
                 if (reason.length == 0) {
-                    revert RecipientNotAccepted(to);
+                    revert RecipientNotAccepted();
                 } else {
                     // pass though internal error
                     assembly {
@@ -356,7 +356,7 @@ contract NFToken is
         uint256 tokenId
     ) internal
     {
-        _verifyTokenOwner(tokenId, from);
+        _verifyFromIsTokenOwner(tokenId, from);
 
         // clear allowance
         _approve(address(0), tokenId);

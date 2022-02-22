@@ -94,11 +94,11 @@ export function assertEvent<T extends TypedEvent> (
 }
 
 export async function assertErrorMessage (
-    tx : Promise<any>,
+    txPromise : Promise<any>,
     message : string
 ) : Promise<void>
 {
-    return tx.then(
+    return txPromise.then(
         (value) => {
             expect.fail(`Found value instead of error: ${value}`);
         },

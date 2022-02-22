@@ -76,13 +76,13 @@ describe('Sale', async() => {
                 const tx = nftToken
                     .connect(alice)
                     .buy(tokenId);
-                assertErrorMessage(tx, 'TokenNotExist()');
+                await assertErrorMessage(tx, 'TokenNotExist()');
             });
         });
     });
     
     describe('With tokens not for sale', async() => {
-        const tokenId = 0;
+        const tokenId = BigNumber.from(0);
         
         it('Should not be for a sale', async() => {
             const isForSale = await nftToken.isForSale(tokenId);
@@ -111,7 +111,7 @@ describe('Sale', async() => {
                 const tx = nftToken
                     .connect(alice)
                     .buy(tokenId);
-                assertErrorMessage(tx, 'TokenNotForSale()');
+                await assertErrorMessage(tx, 'TokenNotForSale()');
             });
         });
     });
@@ -242,7 +242,7 @@ describe('Sale', async() => {
                 const tx = nftToken
                     .connect(alice)
                     .buy(tokenId, { value: ethers.utils.parseEther('1.5') });
-                assertErrorMessage(tx, `WrongAmountPaid(${ethers.utils.parseEther('1.0')}, ${ethers.utils.parseEther('1.5')})`);
+                await assertErrorMessage(tx, `WrongAmountPaid(${ethers.utils.parseEther('1.0')}, ${ethers.utils.parseEther('1.5')})`);
             });
             
             it('Should emit Sold event', async() => {

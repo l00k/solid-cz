@@ -1,7 +1,7 @@
 import { MintedEvent, SampleToken, TokenStruct, TransferEvent } from '@/SampleToken';
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
 import colors from 'colors';
-import { BigNumber } from 'ethers';
+import { BigNumber, Contract } from 'ethers';
 import { ethers } from 'hardhat';
 import {
     AccountMap,
@@ -15,7 +15,7 @@ import { findEvent, txExec } from '../helpers/utils';
 
 
 export type AccountState = BaseAccountState & {
-    nfts: number[],
+    nfts: BigNumber[],
 };
 
 
@@ -81,7 +81,7 @@ export class TestContext
             const accountState : AccountState = this.accountsState[accountName];
             
             for (let i = 0; i < amount; ++i) {
-                const tokenId = tid++;
+                const tokenId = BigNumber.from(tid++);
                 
                 const [ tx, result ] = await txExec(
                     this.nftToken

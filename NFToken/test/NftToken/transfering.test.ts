@@ -1,355 +1,542 @@
-import {
-    ApprovalEvent,
-    ApprovalForAllEvent,
-    BurnedEvent,
-    MintedEvent,
-    SampleToken,
-    TransferEvent
-} from '@/SampleToken';
+import { ApprovalEvent, SampleToken, TransferEvent } from '@/SampleToken';
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
 import { expect } from 'chai';
+import { BigNumber, Contract, ContractTransaction } from 'ethers';
 import { ethers } from 'hardhat';
-import { assertErrorMessage, assertIsAvailableOnlyForOwner, findEvent, txExec } from '../helpers/utils';
-import { AccountState, TestContext } from './TestContext';
+import { before } from 'mocha';
+import { assertErrorMessage, assertEvent, txExec } from '../helpers/utils';
+import { TestContext } from './TestContext';
 
 
 const zeroAddress = '0x0000000000000000000000000000000000000000';
 
+type SendContext = {
+    sender : SignerWithAddress;
+    from : string;
+    to : string;
+    tokenId : BigNumber;
+}
 
-describe('Transfering', async() => {
+describe('Transfering and approving', async() => {
     let owner : SignerWithAddress;
     let alice : SignerWithAddress;
     let bob : SignerWithAddress;
     let carol : SignerWithAddress;
     let dave : SignerWithAddress;
-    let eva : SignerWithAddress;
+    [ owner, alice, bob, carol, dave ] = await ethers.getSigners();
     
     let testContext : TestContext;
     let nftToken : SampleToken;
     
+    let holderContract : Contract = null;
+    let nonHolderContract : Contract = null;
+    
+    const sendContext : SendContext = {
+        sender: alice,
+        tokenId: BigNumber.from(0),
+        from: alice.address,
+        to: null,
+    };
     
     
     beforeEach(async() => {
         testContext = new TestContext();
         
+        // create holders
+        holderContract = await testContext.deployContract('HolderContract');
+        nonHolderContract = await testContext.deployContract('NonHolderContract');
+        
         await testContext.initAccounts();
         nftToken = await testContext.initNftTokenContract();
         
-        [ owner, alice, bob, carol, dave, eva ] = await ethers.getSigners();
-        
         // create tokens
         await testContext.createTokens(15);
-        await testContext.sendTokens(3);
     });
     
     
-    it('Should allow transfering only allowed tokens (owner)', async() => {
-        const tokenId = testContext.accountsState.alice.nfts[0];
-        
-        // non allowed
-        {
-            const tx = nftToken
-                .connect(bob)
-                .transferFrom(
-                    alice.address,
-                    bob.address,
-                    tokenId
-                );
-            await assertErrorMessage(tx, `NotAllowed()`)
-        }
-        
-        // allowed
-        {
-            const [tx, result] = await txExec(
-                nftToken
-                    .connect(alice)
+    enum SendMode
+    {
+        Basic,
+        Safe,
+    };
+    
+    function testSendFailure (
+        error : string,
+        modes : SendMode[] = [ SendMode.Basic, SendMode.Safe ]
+    )
+    {
+        if (modes.includes(SendMode.Basic)) {
+            it(`Should fail with ${error} error while sending using transferFrom`, async() => {
+                const txPromise = nftToken
+                    .connect(sendContext.sender)
                     .transferFrom(
-                        alice.address,
-                        bob.address,
-                        tokenId
-                    )
-            );
-            
-            const event : TransferEvent = findEvent(result, 'Transfer');
-            expect(event.args.from).to.be.equal(alice.address);
-            expect(event.args.to).to.be.equal(bob.address);
-            expect(event.args.tokenId).to.be.equal(tokenId);
-        }
-    });
-    
-    it('Should properly handle approving', async() => {
-        const tokenId = testContext.accountsState.alice.nfts[0];
-        
-        // approved for no one
-        {
-            const allowance = await nftToken.getApproved(tokenId);
-            expect(allowance).to.be.equal(zeroAddress);
+                        sendContext.from,
+                        sendContext.to,
+                        sendContext.tokenId
+                    );
+                await assertErrorMessage(txPromise, error);
+            });
         }
         
-        // approve
-        {
-            const [tx, result] = await txExec(
-                nftToken
-                    .connect(alice)
-                    .approve(bob.address, tokenId)
-            );
-            
-            const event : ApprovalEvent = findEvent(result, 'Approval');
-            expect(event.args.tokenId).to.be.equal(tokenId);
-            expect(event.args.owner).to.be.equal(alice.address);
-            expect(event.args.approved).to.be.equal(bob.address);
-        }
-        
-        // properly approved
-        {
-            const allowance = await nftToken.getApproved(tokenId);
-            expect(allowance).to.be.equal(bob.address);
-        }
-    });
-    
-    it('Should not be able to approve non owned token', async() => {
-        const tokenId = testContext.accountsState.bob.nfts[0];
-        
-        // approve
-        {
-            const tx = nftToken
-                .connect(alice)
-                .approve(carol.address, tokenId);
-            
-            await assertErrorMessage(tx, `NotAllowed()`);
-        }
-    });
-    
-    it('Should allow transfering only allowed tokens (approve)', async() => {
-        const tokenId = testContext.accountsState.alice.nfts[0];
-        
-        // non allowed
-        {
-            const tx = nftToken
-                .connect(bob)
-                .transferFrom(
-                    alice.address,
-                    bob.address,
-                    tokenId
-                );
-            await assertErrorMessage(tx, `NotAllowed()`)
-        }
-        
-        // approve
-        {
-            const [tx, result] = await txExec(
-                nftToken
-                    .connect(alice)
-                    .approve(bob.address, tokenId)
-            );
-        }
-        
-        // allowed
-        {
-            const [tx, result] = await txExec(
-                nftToken
-                    .connect(bob)
-                    .transferFrom(
-                        alice.address,
-                        bob.address,
-                        tokenId
-                    )
-            );
-            
-            const event : TransferEvent = findEvent(result, 'Transfer');
-            expect(event.args.from).to.be.equal(alice.address);
-            expect(event.args.to).to.be.equal(bob.address);
-            expect(event.args.tokenId).to.be.equal(tokenId);
-        }
-    });
-    
-    it('Should remove allowance after transfering', async() => {
-        const tokenId = testContext.accountsState.alice.nfts[0];
-        
-        // approve
-        {
-            const [tx, result] = await txExec(
-                nftToken
-                    .connect(alice)
-                    .approve(bob.address, tokenId)
-            );
-        }
-        
-        // transfer
-        {
-            const [tx, result] = await txExec(
-                nftToken
-                    .connect(bob)
-                    .transferFrom(
-                        alice.address,
-                        bob.address,
-                        tokenId
-                    )
-            );
-        }
-        
-        // checks
-        {
-            const allowance = await nftToken.getApproved(tokenId);
-            expect(allowance).to.be.equal(zeroAddress);
-        }
-    });
-    
-    it('Should properly handle approving for all', async() => {
-        // not approved yet
-        {
-            const allowance = await nftToken.isApprovedForAll(alice.address, bob.address);
-            expect(allowance).to.be.equal(false);
-        }
-        
-        // approve
-        {
-            const [tx, result] = await txExec(
-                nftToken
-                    .connect(alice)
-                    .setApprovalForAll(bob.address, true)
-            );
-            
-            const event : ApprovalForAllEvent = findEvent(result, 'ApprovalForAll');
-            expect(event.args.owner).to.be.equal(alice.address);
-            expect(event.args.operator).to.be.equal(bob.address);
-            expect(event.args.approved).to.be.equal(true);
-        }
-        
-        // properly approved
-        {
-            const allowance = await nftToken.isApprovedForAll(alice.address, bob.address);
-            expect(allowance).to.be.equal(true);
-        }
-    });
-    
-    it('Should allow transfering only allowed tokens (approvalForAll)', async() => {
-        const tokenId = testContext.accountsState.alice.nfts[0];
-        
-        // non allowed
-        {
-            const tx = nftToken
-                .connect(bob)
-                .transferFrom(
-                    alice.address,
-                    bob.address,
-                    tokenId
-                );
-            await assertErrorMessage(tx, `NotAllowed()`)
-        }
-        
-        // approve
-        {
-            const [tx, result] = await txExec(
-                nftToken
-                    .connect(alice)
-                    .setApprovalForAll(bob.address, true)
-            );
-        }
-        
-        // allowed
-        {
-            const [tx, result] = await txExec(
-                nftToken
-                    .connect(bob)
-                    .transferFrom(
-                        alice.address,
-                        bob.address,
-                        tokenId
-                    )
-            );
-            
-            const event : TransferEvent = findEvent(result, 'Transfer');
-            expect(event.args.from).to.be.equal(alice.address);
-            expect(event.args.to).to.be.equal(bob.address);
-            expect(event.args.tokenId).to.be.equal(tokenId);
-        }
-    });
-    
-    it('Should prevent sending token to non compilant contract (safeTransfer)', async() => {
-        const tokenId = testContext.accountsState.alice.nfts[0];
-        
-        const nonHolderContract = await testContext.deployContract('NonHolderContract');
-        
-        // non allowed
-        {
-            const tx = nftToken
-                .connect(alice)
-                ['safeTransferFrom(address,address,uint256)'](
-                    alice.address,
-                    nonHolderContract.address,
-                    tokenId
-                );
-            await assertErrorMessage(tx, `RecipientNotAccepted("${nonHolderContract.address}")`);
-        }
-        
-    });
-    
-    it('Should allow sending token to compilant contract (safeTransfer)', async() => {
-        const tokenId = testContext.accountsState.alice.nfts[0];
-        
-        const holderContract = await testContext.deployContract('HolderContract');
-        
-        // allowed
-        {
-            const [tx, result] = await txExec(
-                nftToken
-                    .connect(alice)
+        if (modes.includes(SendMode.Safe)) {
+            it(`Should fail with ${error} error while sending using safeTransferFrom`, async() => {
+                const txPromise = nftToken
+                    .connect(sendContext.sender)
                     ['safeTransferFrom(address,address,uint256)'](
-                        alice.address,
-                        holderContract.address,
-                        tokenId
-                    )
+                        sendContext.from,
+                        sendContext.to,
+                        sendContext.tokenId
+                    );
+                await assertErrorMessage(txPromise, error);
+            });
+            
+            it(`Should fail with ${error} error while sending using safeTransferFrom with bytes`, async() => {
+                const txPromise = nftToken
+                    .connect(sendContext.sender)
+                    ['safeTransferFrom(address,address,uint256,bytes)'](
+                        sendContext.from,
+                        sendContext.to,
+                        sendContext.tokenId,
+                        []
+                    );
+                await assertErrorMessage(txPromise, error);
+            });
+        }
+    }
+    
+    function testSendSuccessSingle (
+        context : { txCallback: () => Promise<ContractTransaction> }
+    )
+    {
+        it('Should emit Transfer event', async() => {
+            const result = await (await context.txCallback()).wait();
+            assertEvent<TransferEvent>(result, 'Transfer', {
+                from: sendContext.from,
+                to: sendContext.to,
+                tokenId: sendContext.tokenId
+            });
+        });
+        
+        it('Should update ownership', async() => {
+            const result = await (await context.txCallback()).wait();
+            const owner = await nftToken.ownerOf(sendContext.tokenId);
+            expect(owner).to.be.equal(sendContext.to);
+        });
+        
+        it('Should update balances', async() => {
+            const senderBalance = await nftToken.balanceOf(sendContext.from);
+            const recipientBalance = await nftToken.balanceOf(sendContext.to);
+            
+            const result = await (await context.txCallback()).wait();
+            
+            {
+                const currentBalance = await nftToken.balanceOf(sendContext.from);
+                const delta = currentBalance.sub(senderBalance);
+                expect(delta).to.be.equal(-1);
+            }
+            {
+                const currentBalance = await nftToken.balanceOf(sendContext.to);
+                const delta = currentBalance.sub(recipientBalance);
+                expect(delta).to.be.equal(1);
+            }
+        });
+        
+        it('Should clear allowance', async() => {
+            const result = await (await context.txCallback()).wait();
+            const owner = await nftToken.getApproved(sendContext.tokenId);
+            expect(owner).to.be.equal(zeroAddress);
+        });
+    }
+    
+    function testSendSuccess (
+        modes : SendMode[] = [ SendMode.Basic, SendMode.Safe ]
+    )
+    {
+        if (modes.includes(SendMode.Basic)) {
+            describe('Sending using transferFrom', async() => {
+                let context : { txCallback: () => Promise<ContractTransaction> } = {
+                    txCallback: null,
+                };
+                
+                beforeEach(async() => {
+                    context.txCallback = () => nftToken
+                        .connect(sendContext.sender)
+                        .transferFrom(
+                            sendContext.from,
+                            sendContext.to,
+                            sendContext.tokenId
+                        );
+                });
+                
+                testSendSuccessSingle(context);
+            });
+        }
+        
+        if (modes.includes(SendMode.Safe)) {
+            describe('Sending using safeTransferFrom', async() => {
+                let context : { txCallback: () => Promise<ContractTransaction> } = {
+                    txCallback: null,
+                };
+                
+                beforeEach(async() => {
+                    context.txCallback = () => nftToken
+                        .connect(sendContext.sender)
+                        ['safeTransferFrom(address,address,uint256)'](
+                            sendContext.from,
+                            sendContext.to,
+                            sendContext.tokenId
+                        );
+                });
+                
+                testSendSuccessSingle(context);
+            });
+            
+            describe('Sending using safeTransferFrom with bytes', async() => {
+                let context : { txCallback: () => Promise<ContractTransaction> } = {
+                    txCallback: null,
+                };
+                
+                beforeEach(async() => {
+                    context.txCallback = () => nftToken
+                        .connect(sendContext.sender)
+                        ['safeTransferFrom(address,address,uint256,bytes)'](
+                            sendContext.from,
+                            sendContext.to,
+                            sendContext.tokenId,
+                            []
+                        );
+                });
+                
+                testSendSuccessSingle(context);
+            });
+        }
+    }
+    
+    
+    describe('Common validation', async() => {
+        it('Properly verifies "from" param', async() => {
+            const txPromise = nftToken
+                .connect(owner)
+                .transferFrom(alice.address, bob.address, BigNumber.from(0));
+            await assertErrorMessage(txPromise, 'FromIsNotTokenOwner()');
+        });
+    });
+    
+    
+    describe('Non existing token', async() => {
+        before(() => {
+            sendContext.tokenId = BigNumber.from(100);
+        });
+        
+        describe('Sending to zero address', async() => {
+            before(() => {
+                sendContext.to = zeroAddress;
+            });
+            
+            testSendFailure('TokenNotExist()');
+        });
+
+        describe('Sending to normal account', async() => {
+            before(() => {
+                sendContext.to = bob.address;
+            });
+            
+            testSendFailure('TokenNotExist()');
+        });
+        
+        describe('Sending to holder contract', async() => {
+            before(() => {
+                sendContext.to = holderContract.address;
+            });
+            
+            testSendFailure('TokenNotExist()');
+        });
+
+        describe('Sending to non holder contract', async() => {
+            before(() => {
+                sendContext.to = nonHolderContract.address;
+            });
+            
+            testSendFailure('TokenNotExist()');
+        });
+        
+        it('Fails to approve with TokenNotExist()', async() => {
+            const txPromise = nftToken
+                .connect(sendContext.sender)
+                .approve(
+                    bob.address,
+                    sendContext.tokenId
+                );
+                
+            await assertErrorMessage(txPromise, 'TokenNotExist()');
+        });
+    });
+    
+    
+    describe('Non owned token', async() => {
+        before(() => {
+            sendContext.tokenId = BigNumber.from(0);
+        });
+
+        describe('Sending to zero address', async() => {
+            before(() => {
+                sendContext.to = zeroAddress;
+            });
+            
+            testSendFailure('NotAllowed()');
+        });
+
+        describe('Sending to normal account', async() => {
+            before(() => {
+                sendContext.to = bob.address;
+            });
+            
+            testSendFailure('NotAllowed()');
+        });
+
+        describe('Sending to holder contract', async() => {
+            before(() => {
+                sendContext.to = holderContract.address;
+            });
+
+            testSendFailure('NotAllowed()');
+        });
+
+        describe('Sending to non holder contract', async() => {
+            before(() => {
+                sendContext.to = nonHolderContract.address;
+            });
+
+            testSendFailure('NotAllowed()');
+        });
+        
+        it('Fails to approve with NotAllowed()', async() => {
+            const txPromise = nftToken
+                .connect(sendContext.sender)
+                .approve(
+                    bob.address,
+                    sendContext.tokenId
+                );
+                
+            await assertErrorMessage(txPromise, 'NotAllowed()');
+        });
+    });
+
+
+    describe('Owned token', async() => {
+        beforeEach(async () => {
+            await testContext.sendTokens(3);
+            sendContext.tokenId = testContext.accountsState.alice.nfts[0];
+        });
+
+        describe('Sending to zero address', async() => {
+            before(() => {
+                sendContext.to = zeroAddress;
+            });
+            
+            testSendFailure('ZeroAddressNotAllowed()');
+        });
+
+        describe('Sending to normal account', async() => {
+            before(() => {
+                sendContext.to = bob.address;
+            });
+            
+            testSendSuccess();
+        });
+
+        describe('Sending to holder contract', async() => {
+            before(() => {
+                sendContext.to = holderContract.address;
+            });
+
+            testSendSuccess();
+        });
+
+        describe('Sending to non holder contract', async() => {
+            before(() => {
+                sendContext.to = nonHolderContract.address;
+            });
+
+            testSendFailure('RecipientNotAccepted()', [ SendMode.Safe ]);
+            testSendSuccess([ SendMode.Basic ]);
+        });
+        
+        describe('Approving', async() => {
+            before(() => {
+                sendContext.to = bob.address;
+            });
+            
+            it('Should emit Approval()', async() => {
+                const [tx, result] = await txExec(
+                    nftToken
+                        .connect(sendContext.sender)
+                        .approve(
+                            sendContext.to,
+                            sendContext.tokenId
+                        )
+                );
+                
+                assertEvent<ApprovalEvent>(result, 'Approval', {
+                    owner: sendContext.from,
+                    approved: sendContext.to,
+                    tokenId: sendContext.tokenId,
+                })
+            });
+            
+            it('Should change state', async() => {
+                const [tx, result] = await txExec(
+                    nftToken
+                        .connect(sendContext.sender)
+                        .approve(
+                            sendContext.to,
+                            sendContext.tokenId
+                        )
+                );
+                
+                const approved = await nftToken.getApproved(sendContext.tokenId);
+                expect(approved).to.be.equal(sendContext.to);
+            });
+        });
+    });
+
+
+    describe('Approved token', async() => {
+        beforeEach(async () => {
+            await testContext.sendTokens(3);
+            await txExec(
+                nftToken
+                    .connect(carol)
+                    .approve(alice.address, testContext.accountsState.carol.nfts[0])
             );
             
-            const event : TransferEvent = findEvent(result, 'Transfer');
-            expect(event.args.from).to.be.equal(alice.address);
-            expect(event.args.to).to.be.equal(holderContract.address);
-            expect(event.args.tokenId).to.be.equal(tokenId);
-        }
+            sendContext.from = carol.address;
+            sendContext.tokenId = testContext.accountsState.carol.nfts[0];
+        });
+
+        describe('Sending to zero address', async() => {
+            before(() => {
+                sendContext.to = zeroAddress;
+            });
+            
+            testSendFailure('ZeroAddressNotAllowed()');
+        });
+
+        describe('Sending to normal account', async() => {
+            before(() => {
+                sendContext.to = bob.address;
+            });
+            
+            testSendSuccess();
+        });
+
+        describe('Sending to holder contract', async() => {
+            before(() => {
+                sendContext.to = holderContract.address;
+            });
+
+            testSendSuccess();
+        });
+
+        describe('Sending to non holder contract', async() => {
+            before(() => {
+                sendContext.to = nonHolderContract.address;
+            });
+
+            testSendFailure('RecipientNotAccepted()', [ SendMode.Safe ]);
+            testSendSuccess([ SendMode.Basic ]);
+        });
+        
+        describe('Approving to someone else', async() => {
+            before(() => {
+                sendContext.to = dave.address;
+            });
+            
+            it('Should emit Approval()', async() => {
+                const [tx, result] = await txExec(
+                    nftToken
+                        .connect(sendContext.sender)
+                        .approve(
+                            sendContext.to,
+                            sendContext.tokenId
+                        )
+                );
+                
+                assertEvent<ApprovalEvent>(result, 'Approval', {
+                    owner: sendContext.from,
+                    approved: sendContext.to,
+                    tokenId: sendContext.tokenId,
+                })
+            });
+            
+            it('Should change state', async() => {
+                const [tx, result] = await txExec(
+                    nftToken
+                        .connect(sendContext.sender)
+                        .approve(
+                            sendContext.to,
+                            sendContext.tokenId
+                        )
+                );
+                
+                const approved = await nftToken.getApproved(sendContext.tokenId);
+                expect(approved).to.be.equal(sendContext.to);
+            });
+        });
     });
+
+
+    describe('Approving for all', async() => {
     
-    it('Should not prevent sending token to non compilant contract (transfer)', async() => {
-        const tokenId = testContext.accountsState.alice.nfts[0];
-        
-        const nonHolderContract = await testContext.deployContract('NonHolderContract');
-        
-        const [tx, result] = await txExec(
-            nftToken
-                .connect(alice)
-                .transferFrom(
-                    alice.address,
-                    nonHolderContract.address,
-                    tokenId
-                )
-        );
-        
-        const event : TransferEvent = findEvent(result, 'Transfer');
-        expect(event.args.from).to.be.equal(alice.address);
-        expect(event.args.to).to.be.equal(nonHolderContract.address);
-        expect(event.args.tokenId).to.be.equal(tokenId);
     });
-    
-    it('Should properly handle alternative form of safeTransfer', async() => {
-        const tokenId = testContext.accountsState.alice.nfts[0];
-        
-        const [tx, result] = await txExec(
-            nftToken
-                .connect(alice)
-                ['safeTransferFrom(address,address,uint256,bytes)'](
-                    alice.address,
-                    bob.address,
-                    tokenId,
-                    []
-                )
-        );
-        
-        const event : TransferEvent = findEvent(result, 'Transfer');
-        expect(event.args.from).to.be.equal(alice.address);
-        expect(event.args.to).to.be.equal(bob.address);
-        expect(event.args.tokenId).to.be.equal(tokenId);
+
+
+    describe('Approved all tokens', async() => {
+        beforeEach(async () => {
+            await testContext.sendTokens(3);
+            await txExec(
+                nftToken
+                    .connect(carol)
+                    .setApprovalForAll(alice.address, true)
+            );
+            
+            sendContext.from = carol.address;
+            sendContext.tokenId = testContext.accountsState.carol.nfts[1];
+        });
+
+        describe('Sending to zero address', async() => {
+            before(() => {
+                sendContext.to = zeroAddress;
+            });
+            
+            testSendFailure('ZeroAddressNotAllowed()');
+        });
+
+        describe('Sending to normal account', async() => {
+            before(() => {
+                sendContext.to = bob.address;
+            });
+            
+            testSendSuccess();
+        });
+
+        describe('Sending to holder contract', async() => {
+            before(() => {
+                sendContext.to = holderContract.address;
+            });
+
+            testSendSuccess();
+        });
+
+        describe('Sending to non holder contract', async() => {
+            before(() => {
+                sendContext.to = nonHolderContract.address;
+            });
+
+            testSendFailure('RecipientNotAccepted()', [ SendMode.Safe ]);
+            testSendSuccess([ SendMode.Basic ]);
+        });
     });
-    
     
     
 });
