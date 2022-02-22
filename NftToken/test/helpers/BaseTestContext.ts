@@ -2,7 +2,7 @@ import { smock } from '@defi-wonderland/smock';
 import { Block } from '@ethersproject/abstract-provider';
 import { ContractReceipt } from '@ethersproject/contracts/src.ts/index';
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
-import { BigNumber, ContractTransaction } from 'ethers';
+import { BigNumber, Contract, ContractTransaction } from 'ethers';
 import { ethers, network } from 'hardhat';
 
 
@@ -116,7 +116,7 @@ export abstract class BaseTestContext
     }
     
     
-    protected async _deployContract (name : string, ...args : any[])
+    public async deployContract<T extends Contract> (name : string, ...args : any[]): Promise<T>
     {
         const [ owner ] = await ethers.getSigners();
         

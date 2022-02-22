@@ -44,7 +44,7 @@ export class TestContext
         maxSupply : number = 1000,
     )
     {
-        this.nftToken = await this._deployContract(
+        this.nftToken = await this.deployContract(
             'SampleToken',
             name,
             symbol,

@@ -1,5 +1,6 @@
-import { SampleToken, BaseURIChangedEvent } from '@/SampleToken';
+import { BaseURIChangedEvent, SampleToken } from '@/SampleToken';
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
+import * as makeInterfaceId from '@openzeppelin/test-helpers/src/makeInterfaceId';
 import { expect } from 'chai';
 import { ethers } from 'hardhat';
 import { assertIsAvailableOnlyForOwner, findEvent, txExec } from '../helpers/utils';
@@ -45,6 +46,40 @@ describe('Management', async() => {
             expect(maxSupply).to.be.equal(1000);
         });
         
+        it('Verify interface support', async() => {
+            {
+                const interfaceId = makeInterfaceId.ERC165([
+                    'supportsInterface(bytes4)',
+                ]);
+                const supports = await nftToken.supportsInterface(interfaceId);
+                expect(supports).to.equal(true);
+            }
+            {
+                const interfaceId = makeInterfaceId.ERC165([
+                    'balanceOf(address)',
+                    'ownerOf(uint256)',
+                    'approve(address,uint256)',
+                    'getApproved(uint256)',
+                    'setApprovalForAll(address,bool)',
+                    'isApprovedForAll(address,address)',
+                    'transferFrom(address,address,uint256)',
+                    'safeTransferFrom(address,address,uint256)',
+                    'safeTransferFrom(address,address,uint256,bytes)',
+                ]);
+                const supports = await nftToken.supportsInterface(interfaceId);
+                expect(supports).to.equal(true);
+            }
+            {
+                const interfaceId = makeInterfaceId.ERC165([
+                    'name()',
+                    'symbol()',
+                    'tokenURI(uint256)',
+                ]);
+                const supports = await nftToken.supportsInterface(interfaceId);
+                expect(supports).to.equal(true);
+            }
+        });
+        
     });
     
     describe('Change base URI', async() => {
@@ -54,7 +89,7 @@ describe('Management', async() => {
             await assertIsAvailableOnlyForOwner(async(account) => {
                 return nftToken
                     .connect(account)
-                    .changeBaseURI(newURL);
+                    .setBaseURI(newURL);
             });
         });
         
@@ -62,7 +97,7 @@ describe('Management', async() => {
             const [ tx, result ] = await txExec(
                 nftToken
                     .connect(owner)
-                    .changeBaseURI(newURL)
+                    .setBaseURI(newURL)
             );
             
             const event : BaseURIChangedEvent = findEvent(result, 'BaseURIChanged');

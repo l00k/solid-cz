@@ -6,6 +6,9 @@ import { assertIsAvailableOnlyForOwner, findEvent, txExec } from '../helpers/uti
 import { AccountState, TestContext } from './TestContext';
 
 
+const zeroAddress = '0x0000000000000000000000000000000000000000';
+
+
 describe('Burning', async() => {
     let owner : SignerWithAddress;
     let alice : SignerWithAddress;
@@ -28,8 +31,8 @@ describe('Burning', async() => {
         [ owner, alice, bob, carol, dave, eva ] = await ethers.getSigners();
         
         // create tokens
-        await testContext.createTokens(25);
-        await testContext.sendTokens(5);
+        await testContext.createTokens(15);
+        await testContext.sendTokens(3);
     });
     
     
@@ -64,12 +67,55 @@ describe('Burning', async() => {
             
             const transferEvent : TransferEvent = findEvent(result, 'Transfer');
             expect(transferEvent.args.from).to.be.equal(account.address);
-            expect(transferEvent.args.to).to.be.equal('0x0000000000000000000000000000000000000000');
+            expect(transferEvent.args.to).to.be.equal(zeroAddress);
             expect(transferEvent.args.tokenId).to.be.equal(tokenId);
             
             // verify token exists
             const exists = await nftToken.exists(tokenId);
             expect(exists).to.be.equal(false);
+        }
+    });
+    
+    it('Should decrease balance', async() => {
+        let totalSupply = await nftToken.totalSupply();
+    
+        for (const [ accountName, account ] of Object.entries(testContext.accounts)) {
+            const accountState : AccountState = testContext.accountsState[accountName];
+            
+            const tokenId = accountState.nfts[0];
+            
+            // check before
+            {
+                const balance = await nftToken.balanceOf(account.address);
+                expect(balance).to.be.equal(3);
+                
+                const currentTotalSupply = await nftToken.totalSupply();
+                expect(currentTotalSupply).to.be.equal(totalSupply);
+                
+                const exists = await nftToken.exists(tokenId);
+                expect(exists).to.be.equal(true);
+            }
+            
+            // burn
+            const [ tx, result ] = await txExec(
+                nftToken
+                    .connect(account)
+                    .burn(tokenId)
+            );
+            
+            totalSupply = totalSupply.sub(1);
+            
+            // check balance after
+            {
+                const balance = await nftToken.balanceOf(account.address);
+                expect(balance).to.be.equal(2);
+                
+                const currentTotalSupply = await nftToken.totalSupply();
+                expect(currentTotalSupply).to.be.equal(totalSupply);
+                
+                const exists = await nftToken.exists(tokenId);
+                expect(exists).to.be.equal(false);
+            }
         }
     });
     

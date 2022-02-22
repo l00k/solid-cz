@@ -1,5 +1,7 @@
 import '@nomiclabs/hardhat-ethers';
+import '@nomiclabs/hardhat-truffle5';
 import '@nomiclabs/hardhat-waffle';
+import '@nomiclabs/hardhat-web3';
 import '@typechain/hardhat';
 import dotenv from 'dotenv';
 import 'hardhat-gas-reporter';

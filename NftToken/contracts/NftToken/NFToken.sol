@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
+import "@openzeppelin/contracts/utils/introspection/ERC165.sol";
 import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
 import "@openzeppelin/contracts/token/ERC721/extensions/IERC721Metadata.sol";
@@ -10,6 +11,7 @@ import "@openzeppelin/contracts/utils/Strings.sol";
 
 
 contract NFToken is
+    ERC165,
     IERC721,
     IERC721Metadata,
     Ownable
@@ -18,6 +20,7 @@ contract NFToken is
 
 
     error InvalidArgument();
+    error ZeroAddressNotAllowed();
     error RecipientNotAccepted(address recipient);
     error NotAllowed(uint256 tokenId);
     error NotTokenOwner(uint256 tokenId);
@@ -79,6 +82,7 @@ contract NFToken is
 
     function balanceOf(address owner) public view override returns (uint256)
     {
+        _verifyNonZeroAddress(owner);
         return _balances[owner];
     }
 
@@ -87,11 +91,13 @@ contract NFToken is
      */
     function ownerOf(uint256 tokenId) public view override returns (address)
     {
+        _verifyTokenExists(tokenId);
         return _owners[tokenId];
     }
 
     function getApproved(uint256 tokenId) public view override returns (address)
     {
+        _verifyTokenExists(tokenId);
         return _allowance[tokenId];
     }
 
@@ -102,21 +108,18 @@ contract NFToken is
 
     function tokenURI(uint256 tokenId) public view override returns (string memory)
     {
-        Token storage token = tokens[tokenId];
-
-        bytes32 hash = keccak256(abi.encode(
-            token.features
-        ));
-        return Strings.toHexString(uint256(hash), 32);
+        _verifyTokenExists(tokenId);
+        return string(abi.encodePacked(_baseURI, Strings.toHexString(tokenId, 16)));
     }
 
     /**
      * ERC165 views
      */
-    function supportsInterface(bytes4 interfaceId) public pure override returns (bool)
+    function supportsInterface(bytes4 interfaceId) public view override(ERC165, IERC165) returns (bool)
     {
         return interfaceId == type(IERC721).interfaceId
-            || interfaceId == type(IERC721Metadata).interfaceId;
+            || interfaceId == type(IERC721Metadata).interfaceId
+            || super.supportsInterface(interfaceId);
     }
 
     /**
@@ -136,7 +139,7 @@ contract NFToken is
     /**
      * @dev Change base URI by owner
      */
-    function changeBaseURI(string calldata baseURI_) external
+    function setBaseURI(string calldata baseURI_) external
         onlyOwner
     {
         _baseURI = baseURI_;
@@ -194,6 +197,7 @@ contract NFToken is
         uint256 tokenId
     ) public override
     {
+        _verifyNonZeroAddress(to);
         _verifyTokenExists(tokenId);
         _verifyAllowance(tokenId, msg.sender);
 
@@ -207,6 +211,7 @@ contract NFToken is
         bytes calldata data
     ) public override
     {
+        _verifyNonZeroAddress(to);
         _verifyTokenExists(tokenId);
         _verifyAllowance(tokenId, msg.sender);
 
@@ -223,6 +228,7 @@ contract NFToken is
         uint256 tokenId
     ) external override
     {
+        _verifyNonZeroAddress(to);
         _verifyTokenExists(tokenId);
         _verifyAllowance(tokenId, msg.sender);
 
@@ -233,14 +239,12 @@ contract NFToken is
      * @dev Gives permission to `to` to transfer `tokenId` token to another account.
      * The approval is cleared when the token is transferred.
      */
-    function approve(address to, uint256 tokenId) external override
+    function approve(address to, uint256 tokenId) public override
     {
         _verifyTokenExists(tokenId);
         _verifyAllowance(tokenId, msg.sender);
 
-        _allowance[tokenId] = to;
-
-        emit Approval(ownerOf(tokenId), to, tokenId);
+        _approve(to, tokenId);
     }
 
     /**
@@ -264,6 +268,13 @@ contract NFToken is
     {
         if (!exists(tokenId)) {
             revert TokenNotExist(tokenId);
+        }
+    }
+
+    function _verifyNonZeroAddress(address account) internal pure
+    {
+        if (account == address(0)) {
+            revert ZeroAddressNotAllowed();
         }
     }
 
@@ -318,6 +329,15 @@ contract NFToken is
     }
 
 
+    function _approve(
+        address to,
+        uint256 tokenId
+    ) internal
+    {
+        _allowance[tokenId] = to;
+        emit Approval(ownerOf(tokenId), to, tokenId);
+    }
+
     function _safeTransfer(
         address from,
         address to,
@@ -338,13 +358,13 @@ contract NFToken is
     {
         _verifyTokenOwner(tokenId, from);
 
+        // clear allowance
+        _approve(address(0), tokenId);
+
         --_balances[from];
         ++_balances[to];
 
         _owners[tokenId] = to;
-
-        // clear allowance
-        _allowance[tokenId] = address(0);
 
         emit Transfer(from, to, tokenId);
     }
