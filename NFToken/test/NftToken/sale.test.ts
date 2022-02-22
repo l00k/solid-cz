@@ -82,7 +82,7 @@ describe('Sale', async() => {
     });
     
     describe('With tokens not for sale', async() => {
-        const tokenId = BigNumber.from(0);
+        const tokenId = 0;
         
         it('Should not be for a sale', async() => {
             const isForSale = await nftToken.isForSale(tokenId);

@@ -59,7 +59,7 @@ export class TestContext
     {
         await this.executeInSingleBlock(async() => {
             for (let i = 0; i < amount; ++i) {
-                this.nftToken
+                await this.nftToken
                     .connect(this.ownerAccount)
                     .mint(
                         this.ownerAccount.address,
