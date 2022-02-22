@@ -55,7 +55,7 @@ describe('Transfering', async() => {
                     bob.address,
                     tokenId
                 );
-            await assertErrorMessage(tx, `NotAllowed(${tokenId})`)
+            await assertErrorMessage(tx, `NotAllowed()`)
         }
         
         // allowed
@@ -116,7 +116,7 @@ describe('Transfering', async() => {
                 .connect(alice)
                 .approve(carol.address, tokenId);
             
-            await assertErrorMessage(tx, `NotAllowed(${tokenId}`);
+            await assertErrorMessage(tx, `NotAllowed()`);
         }
     });
     
@@ -132,7 +132,7 @@ describe('Transfering', async() => {
                     bob.address,
                     tokenId
                 );
-            await assertErrorMessage(tx, `NotAllowed(${tokenId})`)
+            await assertErrorMessage(tx, `NotAllowed()`)
         }
         
         // approve
@@ -235,7 +235,7 @@ describe('Transfering', async() => {
                     bob.address,
                     tokenId
                 );
-            await assertErrorMessage(tx, `NotAllowed(${tokenId})`)
+            await assertErrorMessage(tx, `NotAllowed()`)
         }
         
         // approve

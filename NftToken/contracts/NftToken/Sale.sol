@@ -6,17 +6,17 @@ import "./NFToken.sol";
 abstract contract Sale is NFToken
 {
 
-    error TokenNotForSale(uint256 tokenId);
-    error WrongAmountPaid(uint256 tokenId, uint256 actualPrice, uint256 paid);
+    error TokenNotForSale();
+    error WrongAmountPaid(uint256 actualPrice, uint256 paid);
 
 
     event MintedForSale(uint256 tokenId, uint256 price);
     event PriceChanged(uint256 tokenId, uint256 newPrice);
-    event Sold(uint256 tokenId, uint256 value);
+    event Sold(uint256 tokenId, address to, uint256 price);
     event PaymentsClaimed(address target, uint256 value);
 
 
-    mapping(uint256 => uint256) public tokenPrices;
+    mapping(uint256 => uint256) private _tokenPrices;
 
 
     /**
@@ -24,8 +24,17 @@ abstract contract Sale is NFToken
      */
     function isForSale(uint256 tokenId) public view returns (bool)
     {
+        _verifyTokenExists(tokenId);
+
         return ownerOf(tokenId) == address(this)
-            && tokenPrices[tokenId] > 0;
+            && _tokenPrices[tokenId] > 0;
+    }
+
+    function tokenPrice(uint256 tokenId) public view returns (uint256)
+    {
+        _verifyIsForSale(tokenId);
+
+        return _tokenPrices[tokenId];
     }
 
 
@@ -40,7 +49,7 @@ abstract contract Sale is NFToken
     {
         uint256 tokenId = _mint(address(this), token);
 
-        tokenPrices[tokenId] = price;
+        _tokenPrices[tokenId] = price;
 
         emit MintedForSale(tokenId, price);
     }
@@ -53,9 +62,28 @@ abstract contract Sale is NFToken
     {
         _verifyIsForSale(tokenId);
 
-        tokenPrices[tokenId] = price;
+        _tokenPrices[tokenId] = price;
 
         emit PriceChanged(tokenId, price);
+    }
+
+    /**
+     * @dev Allow to buy token. Requires sending proper value in transaction.
+     */
+    function buy(uint256 tokenId) external payable
+    {
+        _verifyIsForSale(tokenId);
+
+        if (msg.value != _tokenPrices[tokenId]) {
+            revert WrongAmountPaid(_tokenPrices[tokenId], msg.value);
+        }
+
+        emit Sold(tokenId, msg.sender, _tokenPrices[tokenId]);
+
+        _safeTransfer(address(this), msg.sender, tokenId, "");
+
+        // clear price
+        _tokenPrices[tokenId] = 0;
     }
 
     /**
@@ -70,32 +98,12 @@ abstract contract Sale is NFToken
         emit PaymentsClaimed(target, amount);
     }
 
-    /**
-     * @dev Allow to buy token. Requires sending proper value in transaction.
-     */
-    function buy(uint256 tokenId) external payable
-    {
-        _verifyIsForSale(tokenId);
-
-        if (msg.value != tokenPrices[tokenId]) {
-            revert WrongAmountPaid(tokenId, tokenPrices[tokenId], msg.value);
-        }
-
-        emit Sold(tokenId, tokenPrices[tokenId]);
-
-        _safeTransfer(address(this), msg.sender, tokenId, "");
-
-        // clear price
-        tokenPrices[tokenId] = 0;
-    }
-
 
     function _verifyIsForSale(uint256 tokenId) internal view
     {
         if (!isForSale(tokenId)) {
-            revert TokenNotForSale(tokenId);
+            revert TokenNotForSale();
         }
     }
-
 
 }

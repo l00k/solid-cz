@@ -22,9 +22,9 @@ contract NFToken is
     error InvalidArgument();
     error ZeroAddressNotAllowed();
     error RecipientNotAccepted(address recipient);
-    error NotAllowed(uint256 tokenId);
-    error NotTokenOwner(uint256 tokenId);
-    error TokenNotExist(uint256 tokenId);
+    error NotAllowed();
+    error NotTokenOwner();
+    error TokenNotExist();
 
 
     event BaseURIChanged(string baseURI);
@@ -267,7 +267,7 @@ contract NFToken is
     function _verifyTokenExists(uint256 tokenId) internal view
     {
         if (!exists(tokenId)) {
-            revert TokenNotExist(tokenId);
+            revert TokenNotExist();
         }
     }
 
@@ -281,7 +281,7 @@ contract NFToken is
     function _verifyTokenOwner(uint256 tokenId, address spender) internal view
     {
         if (spender != ownerOf(tokenId)) {
-            revert NotTokenOwner(tokenId);
+            revert NotTokenOwner();
         }
     }
 
@@ -299,7 +299,7 @@ contract NFToken is
             return;
         }
 
-        revert NotAllowed(tokenId);
+        revert NotAllowed();
     }
 
     function _verifyTokenRecievementAllowed(

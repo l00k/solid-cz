@@ -45,7 +45,7 @@ describe('Burning', async() => {
                 return nftToken
                     .connect(account)
                     .burn(tokenId);
-            }, account, `NotAllowed(${tokenId})`);
+            }, account, `NotAllowed()`);
         }
     });
     

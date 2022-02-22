@@ -1,10 +1,11 @@
+import { TypedEvent } from '@/common';
 import { smock } from '@defi-wonderland/smock';
 import { Block } from '@ethersproject/abstract-provider';
 import { ContractReceipt } from '@ethersproject/contracts/src.ts/index';
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
 import chai, { expect } from 'chai';
 import chaiSubset from 'chai-subset';
-import { BaseContract, BigNumber, BigNumberish, ContractTransaction, Event } from 'ethers';
+import { BigNumber, BigNumberish, ContractTransaction, Event } from 'ethers';
 import { ethers, network } from 'hardhat';
 
 chai.use(chaiSubset);
@@ -40,14 +41,6 @@ export function findEvent<T extends Event> (result : ContractReceipt, eventName 
     
     return <any>events[offset];
 }
-
-
-export async function timetravel (seconds : number) : Promise<any>
-{
-    await network.provider.send('evm_increaseTime', [ seconds ]);
-    return network.provider.send('evm_mine');
-}
-
 
 export async function mineBlock (delay : number = 10) : Promise<Block>
 {
@@ -87,21 +80,59 @@ export async function assertIsAvailableOnlyForOwner(
     expect(result.status).to.be.equal(1);
 }
 
+export function assertEvent<T extends TypedEvent> (
+    result : ContractReceipt,
+    eventName : string,
+    eventArgs : Partial<T['args']>
+)
+{
+    const event = findEvent(result, eventName);
+    
+    for (const [property, value] of Object.entries(eventArgs)) {
+        expect(event.args[property]).to.be.equal(value);
+    }
+}
 
 export async function assertErrorMessage (
-    tx : Promise<ContractTransaction>,
+    tx : Promise<any>,
     message : string
 ) : Promise<void>
 {
     return tx.then(
-        (value) =>
-        {
+        (value) => {
             expect.fail(`Found value instead of error: ${value}`);
         },
         (reason) => {
             expect(reason.message).to.contain(message);
         }
     );
+}
+
+type AccountBalanceMap = { [address : string] : BigNumberish };
+export async function assertEtherBalanceChange (
+    promise : () => Promise<AccountBalanceMap>,
+    balanceChange : AccountBalanceMap,
+)
+{
+    const balancesBefore : AccountBalanceMap = {};
+    for (const account in balanceChange) {
+        balancesBefore[account] = await ethers.provider.getBalance(account);
+    }
+    
+    const fees : AccountBalanceMap = await promise();
+    
+    // check change
+    for (const account in balanceChange) {
+        const currentBalance = await ethers.provider.getBalance(account);
+        let delta = currentBalance
+            .sub(balancesBefore[account]);
+        
+        if (fees?.[account]) {
+            delta = delta.add(fees?.[account]);
+        }
+        
+        expect(delta).to.be.equal(balanceChange[account]);
+    }
 }
 
 
