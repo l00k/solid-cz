@@ -29,5 +29,5 @@ Improved Staking3 version.
 Allows manual assignments to new reward pools.
   
 --
-#### ./NftToken
+#### ./NFToken
 NFT implementation sample.
