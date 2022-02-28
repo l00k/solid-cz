@@ -3,6 +3,7 @@ pragma solidity ^0.8.0;
 
 import "@openzeppelin/contracts/utils/introspection/ERC165.sol";
 import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
+import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
 import "@openzeppelin/contracts/token/ERC721/extensions/IERC721Metadata.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
@@ -11,7 +12,7 @@ import "@openzeppelin/contracts/utils/Strings.sol";
 
 
 contract NFToken is
-    ERC165,
+    IERC165,
     IERC721,
     IERC721Metadata,
     Ownable
@@ -40,12 +41,15 @@ contract NFToken is
         uint64 createdAt;
     }
 
+    mapping(bytes4 => bool) internal _supportedInterfaces;
 
     string private _name;
     string private _symbol;
     string private _baseURI;
 
     Token[] public tokens;
+
+    uint256 private _totalSupply;
 
     mapping(address => uint256) private _balances;
     mapping(uint256 => address) private _owners;
@@ -64,6 +68,10 @@ contract NFToken is
         _name = name_;
         _symbol = symbol_;
         _baseURI = baseURI_;
+
+        _supportedInterfaces[type(IERC165).interfaceId] = true;
+        _supportedInterfaces[type(IERC721).interfaceId] = true;
+        _supportedInterfaces[type(IERC721Metadata).interfaceId] = true;
     }
 
 
@@ -115,11 +123,9 @@ contract NFToken is
     /**
      * ERC165 views
      */
-    function supportsInterface(bytes4 interfaceId) public view override(ERC165, IERC165) returns (bool)
+    function supportsInterface(bytes4 interfaceId) public view override(IERC165) returns (bool)
     {
-        return interfaceId == type(IERC721).interfaceId
-            || interfaceId == type(IERC721Metadata).interfaceId
-            || super.supportsInterface(interfaceId);
+        return _supportedInterfaces[interfaceId];
     }
 
     /**
@@ -133,6 +139,11 @@ contract NFToken is
     function exists(uint256 tokenId) public view returns (bool)
     {
         return _owners[tokenId] != address(0);
+    }
+
+    function totalSupply() public virtual view returns (uint256)
+    {
+        return _totalSupply;
     }
 
 
@@ -278,9 +289,9 @@ contract NFToken is
         }
     }
 
-    function _verifyFromIsTokenOwner(uint256 tokenId, address spender) internal view
+    function _verifyFromIsTokenOwner(uint256 tokenId, address account) internal view
     {
-        if (spender != ownerOf(tokenId)) {
+        if (account != _owners[tokenId]) {
             revert FromIsNotTokenOwner();
         }
     }
@@ -358,6 +369,8 @@ contract NFToken is
     {
         _verifyFromIsTokenOwner(tokenId, from);
 
+        _beforeTokenTransfer(from, to, tokenId);
+
         // clear allowance
         _approve(address(0), tokenId);
 
@@ -367,6 +380,24 @@ contract NFToken is
         _owners[tokenId] = to;
 
         emit Transfer(from, to, tokenId);
+
+        _afterTokenTransfer(from, to, tokenId);
+    }
+
+    function _beforeTokenTransfer(
+        address from,
+        address to,
+        uint256 tokenId
+    ) internal virtual
+    {
+    }
+
+    function _afterTokenTransfer(
+        address from,
+        address to,
+        uint256 tokenId
+    ) internal virtual
+    {
     }
 
 
@@ -385,16 +416,22 @@ contract NFToken is
         Token calldata token
     ) internal virtual returns (uint256)
     {
-        // create token
         tokens.push(token);
         uint256 tokenId = tokens.length - 1;
 
         tokens[tokenId].createdAt = uint64(block.timestamp);
 
-        _owners[tokenId] = to;
+        _beforeTokenTransfer(address(0), to, tokenId);
+
         ++_balances[to];
+        ++_totalSupply;
+
+        _owners[tokenId] = to;
 
         emit Minted(to, tokenId);
+        emit Transfer(address(0), to, tokenId);
+
+        _afterTokenTransfer(address(0), to, tokenId);
 
         return tokenId;
     }
@@ -403,9 +440,18 @@ contract NFToken is
     {
         address owner = ownerOf(tokenId);
 
-        _transfer(owner, address(0), tokenId);
+        _beforeTokenTransfer(owner, address(0), tokenId);
 
+        --_balances[owner];
+        --_totalSupply;
+
+        delete _owners[tokenId];
+        delete _allowance[tokenId];
+
+        emit Transfer(owner, address(0), tokenId);
         emit Burned(owner, tokenId);
+
+        _afterTokenTransfer(owner, address(0), tokenId);
     }
 
 }

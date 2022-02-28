@@ -2,12 +2,14 @@
 pragma solidity ^0.8.0;
 
 import "./NFToken/NFToken.sol";
+import "./NFToken/Enumerable.sol";
 import "./NFToken/Sale.sol";
 import "./NFToken/Limited.sol";
 
 
 contract SampleToken is
     NFToken,
+    Enumerable,
     Limited,
     Sale
 {
@@ -19,10 +21,25 @@ contract SampleToken is
         uint256 maxSupply_
     )
         NFToken(name_, symbol_, baseURI_)
+        Enumerable()
         Limited(maxSupply_)
     {
     }
 
+
+    function totalSupply() public virtual override(NFToken, Enumerable) view returns (uint256)
+    {
+        return Enumerable.totalSupply();
+    }
+
+    function _beforeTokenTransfer(
+        address from,
+        address to,
+        uint256 tokenId
+    ) internal override(NFToken, Enumerable)
+    {
+        Enumerable._beforeTokenTransfer(from, to, tokenId);
+    }
 
     function _mint(
         address to,
@@ -30,11 +47,6 @@ contract SampleToken is
     ) internal override(NFToken, Limited) returns (uint256)
     {
         return Limited._mint(to, token);
-    }
-
-    function _burn(uint256 tokenId) internal override(NFToken, Limited)
-    {
-        Limited._burn(tokenId);
     }
 
 }

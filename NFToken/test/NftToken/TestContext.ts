@@ -1,22 +1,26 @@
-import { MintedEvent, SampleToken, TokenStruct, TransferEvent } from '@/SampleToken';
-import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
+import { SampleToken } from '@/SampleToken';
 import colors from 'colors';
-import { BigNumber, Contract } from 'ethers';
+import { BigNumber } from 'ethers';
 import { ethers } from 'hardhat';
 import {
     AccountMap,
     AccountNames,
     AccountState as BaseAccountState,
-    BaseTestContext,
-    TokenMap
+    BaseTestContext
 } from '../helpers/BaseTestContext';
-import { findEvent, txExec } from '../helpers/utils';
+import { txExec } from '../helpers/utils';
 
 
 
 export type AccountState = BaseAccountState & {
-    nfts: BigNumber[],
+    nfts : BigNumber[],
 };
+
+type Token = {
+    name : string,
+    features : BigNumber,
+    createdAt : BigNumber,
+}
 
 
 export class TestContext
@@ -26,6 +30,8 @@ export class TestContext
     public nftToken : SampleToken;
     
     public accountsState : AccountMap<AccountState> = {};
+    
+    public tokens : Token[] = [];
     
     
     public async initAccounts ()
@@ -55,25 +61,29 @@ export class TestContext
         return this.nftToken;
     }
     
-    public async createTokens(amount : number)
+    public async createTokens (amount : number)
     {
         await this.executeInSingleBlock(async() => {
             for (let i = 0; i < amount; ++i) {
+                const token : Token = {
+                    name: `Token #${i}`,
+                    features: BigNumber.from(i),
+                    createdAt: BigNumber.from(0),
+                };
+
+                this.tokens.push(token);
+            
                 await this.nftToken
                     .connect(this.ownerAccount)
                     .mint(
                         this.ownerAccount.address,
-                        {
-                            name: `Token #${i}`,
-                            features: i,
-                            createdAt: 0,
-                        }
-                    )
+                        token
+                    );
             }
         });
     }
     
-    public async sendTokens(amount : number)
+    public async sendTokens (amount : number)
     {
         let tid = 0;
         for (const accountName of [ 'alice', 'bob', 'carol', 'dave', 'eva' ]) {
@@ -87,10 +97,10 @@ export class TestContext
                     this.nftToken
                         .connect(this.ownerAccount)
                         ['safeTransferFrom(address,address,uint256)'](
-                            this.ownerAccount.address,
-                            account.address,
-                            tokenId
-                        )
+                        this.ownerAccount.address,
+                        account.address,
+                        tokenId
+                    )
                 );
                 
                 accountState.nfts.push(tokenId);
@@ -98,14 +108,4 @@ export class TestContext
         }
     }
     
-    public async displayDetails (label : string = 'details')
-    {
-        const block = await ethers.provider.getBlock('latest');
-        
-        console.log(
-            colors.red('### ' + label),
-        );
-        
-        console.log();
-    }
 }
