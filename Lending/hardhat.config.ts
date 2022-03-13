@@ -31,21 +31,10 @@ const config : HardhatUserConfig = {
         hardhat: {
             // forking: {
             //     url: `https://eth-mainnet.alchemyapi.io/v2/${alchemyApiKey}`,
-            //     blockNumber: 14314740,
+            //     blockNumber: 13980000
             // }
         }
     },
-    watcher: {
-        test: {
-            tasks: [
-                'test'
-            ],
-            files: [
-                './contracts/**/*',
-                './test/**/*',
-            ],
-        }
-    }
 };
 
 export default config;

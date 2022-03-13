@@ -1,0 +1,30 @@
+{
+    "compilerOptions": {
+        "target": "esnext",
+        "module": "commonjs",
+        "strict": true,
+        "esModuleInterop": true,
+        "outDir": "dist",
+        "resolveJsonModule": true,
+        "noImplicitAny": false,
+        "noImplicitThis": true,
+        "noImplicitReturns": true,
+        "strictNullChecks": false,
+        "strictPropertyInitialization": false,
+        "baseUrl": ".",
+        "paths": {
+            "@/*": [
+                "artifacts/*",
+                "typechain-types/*"
+            ]
+        }
+    },
+    "include": [
+        "./scripts",
+        "./test",
+        "./typechain"
+    ],
+    "files": [
+        "./hardhat.config.ts"
+    ]
+}

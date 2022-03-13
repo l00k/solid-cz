@@ -13,7 +13,7 @@ const contractsToTest = [
 
 contractsToTest.forEach(contractName => {
     
-    describe(`${contractName} is CoinBase`, async() => {
+    describe(`${contractName} is CoinBase`, () => {
         let owner : SignerWithAddress;
         let alice : SignerWithAddress;
         let bob : SignerWithAddress;

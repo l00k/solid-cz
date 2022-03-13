@@ -7,7 +7,7 @@ import { TestContext } from './TestContext';
 const rlp = require('rlp');
 
 
-describe('Token data', async() => {
+describe('Token data', () => {
     let owner : SignerWithAddress;
     let alice : SignerWithAddress;
     let bob : SignerWithAddress;

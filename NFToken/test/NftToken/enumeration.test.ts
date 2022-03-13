@@ -10,7 +10,7 @@ import { AccountState, TestContext } from './TestContext';
 const zeroAddress = '0x0000000000000000000000000000000000000000';
 
 
-describe('Enumeration', async() => {
+describe('Enumeration', () => {
     let owner : SignerWithAddress;
     let alice : SignerWithAddress;
     let bob : SignerWithAddress;
@@ -62,7 +62,7 @@ describe('Enumeration', async() => {
     });
     
     
-    describe('Without tokens', async() => {
+    describe('Without tokens', () => {
         it('Returns proper totalSupply', async() => {
             const totalSupply = await nftToken.totalSupply();
             expect(totalSupply).to.be.equal(0);
@@ -80,7 +80,7 @@ describe('Enumeration', async() => {
     });
     
     
-    describe('With minted tokens', async() => {
+    describe('With minted tokens', () => {
         beforeEach(async() => {
             await testContext.createTokens(5);
         });
@@ -99,7 +99,7 @@ describe('Enumeration', async() => {
         });
         
         
-        describe('Sending to itself', async() => {
+        describe('Sending to itself', () => {
             beforeEach(async() => {
                 await txExec(
                     nftToken
@@ -127,7 +127,7 @@ describe('Enumeration', async() => {
         });
         
         for (const id of [ 0, 4 ]) {
-            describe(`Sending (#${id}) to someone else`, async() => {
+            describe(`Sending (#${id}) to someone else`, () => {
                 beforeEach(async() => {
                     await txExec(
                         nftToken
@@ -165,7 +165,7 @@ describe('Enumeration', async() => {
         }
         
         for (const id of [ 0, 4 ]) {
-            describe(`Burning (#${id})`, async() => {
+            describe(`Burning (#${id})`, () => {
                 beforeEach(async() => {
                     await txExec(
                         nftToken

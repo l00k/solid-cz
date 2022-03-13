@@ -31,3 +31,7 @@ Allows manual assignments to new reward pools.
 --
 #### ./NFToken
 NFT implementation sample.
+
+--
+#### ./Lending
+Lending platform sample.

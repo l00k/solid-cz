@@ -24,7 +24,7 @@ import { TestContext } from './TestContext';
 const zeroAddress = '0x0000000000000000000000000000000000000000';
 
 
-describe('Sale', async() => {
+describe('Sale', () => {
     let owner : SignerWithAddress;
     let alice : SignerWithAddress;
     let bob : SignerWithAddress;
@@ -46,7 +46,7 @@ describe('Sale', async() => {
     });
     
     
-    describe('Non existing token', async() => {
+    describe('Non existing token', () => {
         const tokenId = BigNumber.from(100);
     
         it('Should throw errors when checking for sale', async() => {
@@ -59,7 +59,7 @@ describe('Sale', async() => {
             await assertErrorMessage(query, 'TokenNotExist()');
         });
         
-        describe('Change token price', async() => {
+        describe('Change token price', () => {
             it('Should throw errors when trying to change price', async() => {
                 const tx = nftToken
                     .connect(owner)
@@ -71,7 +71,7 @@ describe('Sale', async() => {
             });
         });
         
-        describe('Buying tokens', async() => {
+        describe('Buying tokens', () => {
             it('Should be for a sale', async() => {
                 const tx = nftToken
                     .connect(alice)
@@ -81,7 +81,7 @@ describe('Sale', async() => {
         });
     });
     
-    describe('With tokens not for sale', async() => {
+    describe('With tokens not for sale', () => {
         const tokenId = BigNumber.from(0);
         
         it('Should not be for a sale', async() => {
@@ -94,7 +94,7 @@ describe('Sale', async() => {
             await assertErrorMessage(query, 'TokenNotForSale()');
         });
         
-        describe('Change token price', async() => {
+        describe('Change token price', () => {
             it('Should throw errors when trying to change price', async() => {
                 const tx = nftToken
                     .connect(owner)
@@ -106,7 +106,7 @@ describe('Sale', async() => {
             });
         });
         
-        describe('Buying tokens', async() => {
+        describe('Buying tokens', () => {
             it('Should be for a sale', async() => {
                 const tx = nftToken
                     .connect(alice)
@@ -116,7 +116,7 @@ describe('Sale', async() => {
         });
     });
     
-    describe('Minting for sale', async() => {
+    describe('Minting for sale', () => {
         it('Should allow only owner to mint tokens for sale', async() => {
             await assertIsAvailableOnlyForOwner(async(account) => {
                 return nftToken
@@ -153,7 +153,7 @@ describe('Sale', async() => {
         });
     });
     
-    describe('With minted tokens for sale', async() => {
+    describe('With minted tokens for sale', () => {
         let tokenId : BigNumber;
     
         beforeEach(async() => {
@@ -184,7 +184,7 @@ describe('Sale', async() => {
             expect(price).to.be.equal(ethers.utils.parseEther('1.0'));
         });
         
-        describe('Change token price', async() => {
+        describe('Change token price', () => {
             it('Should be able to execute only by owner', async() => {
                 await assertIsAvailableOnlyForOwner(async(account) => {
                     return nftToken
@@ -213,7 +213,7 @@ describe('Sale', async() => {
             });
         });
         
-        describe('With price changed', async() => {
+        describe('With price changed', () => {
             beforeEach(async() => {
                 await txExec(
                     nftToken
@@ -237,7 +237,7 @@ describe('Sale', async() => {
         });
         
         
-        describe('Buying tokens', async() => {
+        describe('Buying tokens', () => {
             it('Should verify proper tx value', async() => {
                 const tx = nftToken
                     .connect(alice)
@@ -291,7 +291,7 @@ describe('Sale', async() => {
             });
         });
         
-        describe('With bought token', async() => {
+        describe('With bought token', () => {
             beforeEach(async() => {
                 await txExec(
                     nftToken
@@ -316,7 +316,7 @@ describe('Sale', async() => {
             });
             
             
-            describe('Claiming payments', async() => {
+            describe('Claiming payments', () => {
                 it('Should be able to execute only by owner', async() => {
                     await assertIsAvailableOnlyForOwner(async(account) => {
                         return nftToken

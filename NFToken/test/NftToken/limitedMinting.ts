@@ -6,7 +6,7 @@ import { assertErrorMessage, assertIsAvailableOnlyForOwner, findEvent, txExec } 
 import { AccountState, TestContext } from './TestContext';
 
 
-describe('Limited minting', async() => {
+describe('Limited minting', () => {
     let owner : SignerWithAddress;
     let alice : SignerWithAddress;
     let bob : SignerWithAddress;

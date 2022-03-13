@@ -17,13 +17,12 @@ type SendContext = {
     tokenId : BigNumber;
 }
 
-describe('Transfering and approving', async() => {
+describe('Transfering and approving', () => {
     let owner : SignerWithAddress;
     let alice : SignerWithAddress;
     let bob : SignerWithAddress;
     let carol : SignerWithAddress;
     let dave : SignerWithAddress;
-    [ owner, alice, bob, carol, dave ] = await ethers.getSigners();
     
     let testContext : TestContext;
     let nftToken : SampleToken;
@@ -31,13 +30,19 @@ describe('Transfering and approving', async() => {
     let holderContract : Contract = null;
     let nonHolderContract : Contract = null;
     
-    const sendContext : SendContext = {
-        sender: alice,
-        tokenId: BigNumber.from(0),
-        from: alice.address,
-        to: null,
-    };
+    let sendContext : SendContext;
     
+    
+    before(async() => {
+        [ owner, alice, bob, carol, dave ] = await ethers.getSigners();
+        
+        sendContext = {
+            sender: alice,
+            tokenId: BigNumber.from(0),
+            from: alice.address,
+            to: null,
+        };
+    });
     
     beforeEach(async() => {
         testContext = new TestContext();
@@ -153,7 +158,7 @@ describe('Transfering and approving', async() => {
     )
     {
         if (modes.includes(SendMode.Basic)) {
-            describe('Sending using transferFrom', async() => {
+            describe('Sending using transferFrom', () => {
                 let context : { txCallback: () => Promise<ContractTransaction> } = {
                     txCallback: null,
                 };
@@ -173,7 +178,7 @@ describe('Transfering and approving', async() => {
         }
         
         if (modes.includes(SendMode.Safe)) {
-            describe('Sending using safeTransferFrom', async() => {
+            describe('Sending using safeTransferFrom', () => {
                 let context : { txCallback: () => Promise<ContractTransaction> } = {
                     txCallback: null,
                 };
@@ -191,7 +196,7 @@ describe('Transfering and approving', async() => {
                 testSendSuccessSingle(context);
             });
             
-            describe('Sending using safeTransferFrom with bytes', async() => {
+            describe('Sending using safeTransferFrom with bytes', () => {
                 let context : { txCallback: () => Promise<ContractTransaction> } = {
                     txCallback: null,
                 };
@@ -213,7 +218,7 @@ describe('Transfering and approving', async() => {
     }
     
     
-    describe('Common validation', async() => {
+    describe('Common validation', () => {
         it('Properly verifies "from" param', async() => {
             const txPromise = nftToken
                 .connect(owner)
@@ -223,12 +228,12 @@ describe('Transfering and approving', async() => {
     });
     
     
-    describe('Non existing token', async() => {
+    describe('Non existing token', () => {
         before(() => {
             sendContext.tokenId = BigNumber.from(100);
         });
         
-        describe('Sending to zero address', async() => {
+        describe('Sending to zero address', () => {
             before(() => {
                 sendContext.to = zeroAddress;
             });
@@ -236,7 +241,7 @@ describe('Transfering and approving', async() => {
             testSendFailure('TokenNotExist()');
         });
 
-        describe('Sending to normal account', async() => {
+        describe('Sending to normal account', () => {
             before(() => {
                 sendContext.to = bob.address;
             });
@@ -244,7 +249,7 @@ describe('Transfering and approving', async() => {
             testSendFailure('TokenNotExist()');
         });
         
-        describe('Sending to holder contract', async() => {
+        describe('Sending to holder contract', () => {
             before(() => {
                 sendContext.to = holderContract.address;
             });
@@ -252,7 +257,7 @@ describe('Transfering and approving', async() => {
             testSendFailure('TokenNotExist()');
         });
 
-        describe('Sending to non holder contract', async() => {
+        describe('Sending to non holder contract', () => {
             before(() => {
                 sendContext.to = nonHolderContract.address;
             });
@@ -273,12 +278,12 @@ describe('Transfering and approving', async() => {
     });
     
     
-    describe('Non owned token', async() => {
+    describe('Non owned token', () => {
         before(() => {
             sendContext.tokenId = BigNumber.from(0);
         });
 
-        describe('Sending to zero address', async() => {
+        describe('Sending to zero address', () => {
             before(() => {
                 sendContext.to = zeroAddress;
             });
@@ -286,7 +291,7 @@ describe('Transfering and approving', async() => {
             testSendFailure('NotAllowed()');
         });
 
-        describe('Sending to normal account', async() => {
+        describe('Sending to normal account', () => {
             before(() => {
                 sendContext.to = bob.address;
             });
@@ -294,7 +299,7 @@ describe('Transfering and approving', async() => {
             testSendFailure('NotAllowed()');
         });
 
-        describe('Sending to holder contract', async() => {
+        describe('Sending to holder contract', () => {
             before(() => {
                 sendContext.to = holderContract.address;
             });
@@ -302,7 +307,7 @@ describe('Transfering and approving', async() => {
             testSendFailure('NotAllowed()');
         });
 
-        describe('Sending to non holder contract', async() => {
+        describe('Sending to non holder contract', () => {
             before(() => {
                 sendContext.to = nonHolderContract.address;
             });
@@ -323,13 +328,13 @@ describe('Transfering and approving', async() => {
     });
 
 
-    describe('Owned token', async() => {
+    describe('Owned token', () => {
         beforeEach(async () => {
             await testContext.sendTokens(3);
             sendContext.tokenId = testContext.accountsState.alice.nfts[0];
         });
 
-        describe('Sending to zero address', async() => {
+        describe('Sending to zero address', () => {
             before(() => {
                 sendContext.to = zeroAddress;
             });
@@ -337,7 +342,7 @@ describe('Transfering and approving', async() => {
             testSendFailure('ZeroAddressNotAllowed()');
         });
 
-        describe('Sending to normal account', async() => {
+        describe('Sending to normal account', () => {
             before(() => {
                 sendContext.to = bob.address;
             });
@@ -345,7 +350,7 @@ describe('Transfering and approving', async() => {
             testSendSuccess();
         });
 
-        describe('Sending to holder contract', async() => {
+        describe('Sending to holder contract', () => {
             before(() => {
                 sendContext.to = holderContract.address;
             });
@@ -353,7 +358,7 @@ describe('Transfering and approving', async() => {
             testSendSuccess();
         });
 
-        describe('Sending to non holder contract', async() => {
+        describe('Sending to non holder contract', () => {
             before(() => {
                 sendContext.to = nonHolderContract.address;
             });
@@ -362,7 +367,7 @@ describe('Transfering and approving', async() => {
             testSendSuccess([ SendMode.Basic ]);
         });
         
-        describe('Approving', async() => {
+        describe('Approving', () => {
             before(() => {
                 sendContext.to = bob.address;
             });
@@ -401,7 +406,7 @@ describe('Transfering and approving', async() => {
     });
 
 
-    describe('Approved token', async() => {
+    describe('Approved token', () => {
         beforeEach(async () => {
             await testContext.sendTokens(3);
             await txExec(
@@ -414,7 +419,7 @@ describe('Transfering and approving', async() => {
             sendContext.tokenId = testContext.accountsState.carol.nfts[0];
         });
 
-        describe('Sending to zero address', async() => {
+        describe('Sending to zero address', () => {
             before(() => {
                 sendContext.to = zeroAddress;
             });
@@ -422,7 +427,7 @@ describe('Transfering and approving', async() => {
             testSendFailure('ZeroAddressNotAllowed()');
         });
 
-        describe('Sending to normal account', async() => {
+        describe('Sending to normal account', () => {
             before(() => {
                 sendContext.to = bob.address;
             });
@@ -430,7 +435,7 @@ describe('Transfering and approving', async() => {
             testSendSuccess();
         });
 
-        describe('Sending to holder contract', async() => {
+        describe('Sending to holder contract', () => {
             before(() => {
                 sendContext.to = holderContract.address;
             });
@@ -438,7 +443,7 @@ describe('Transfering and approving', async() => {
             testSendSuccess();
         });
 
-        describe('Sending to non holder contract', async() => {
+        describe('Sending to non holder contract', () => {
             before(() => {
                 sendContext.to = nonHolderContract.address;
             });
@@ -447,7 +452,7 @@ describe('Transfering and approving', async() => {
             testSendSuccess([ SendMode.Basic ]);
         });
         
-        describe('Approving to someone else', async() => {
+        describe('Approving to someone else', () => {
             before(() => {
                 sendContext.to = dave.address;
             });
@@ -486,12 +491,12 @@ describe('Transfering and approving', async() => {
     });
 
 
-    describe('Approving for all', async() => {
+    describe('Approving for all', () => {
     
     });
 
 
-    describe('Approved all tokens', async() => {
+    describe('Approved all tokens', () => {
         beforeEach(async () => {
             await testContext.sendTokens(3);
             await txExec(
@@ -504,7 +509,7 @@ describe('Transfering and approving', async() => {
             sendContext.tokenId = testContext.accountsState.carol.nfts[1];
         });
 
-        describe('Sending to zero address', async() => {
+        describe('Sending to zero address', () => {
             before(() => {
                 sendContext.to = zeroAddress;
             });
@@ -512,7 +517,7 @@ describe('Transfering and approving', async() => {
             testSendFailure('ZeroAddressNotAllowed()');
         });
 
-        describe('Sending to normal account', async() => {
+        describe('Sending to normal account', () => {
             before(() => {
                 sendContext.to = bob.address;
             });
@@ -520,7 +525,7 @@ describe('Transfering and approving', async() => {
             testSendSuccess();
         });
 
-        describe('Sending to holder contract', async() => {
+        describe('Sending to holder contract', () => {
             before(() => {
                 sendContext.to = holderContract.address;
             });
@@ -528,7 +533,7 @@ describe('Transfering and approving', async() => {
             testSendSuccess();
         });
 
-        describe('Sending to non holder contract', async() => {
+        describe('Sending to non holder contract', () => {
             before(() => {
                 sendContext.to = nonHolderContract.address;
             });

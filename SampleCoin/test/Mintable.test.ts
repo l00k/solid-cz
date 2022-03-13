@@ -12,7 +12,7 @@ const contractsToTest = [
 
 contractsToTest.forEach(contractName => {
     
-    describe(`${contractName} is Mintable`, async() => {
+    describe(`${contractName} is Mintable`, () => {
         let owner : SignerWithAddress;
         let alice : SignerWithAddress;
         let bob : SignerWithAddress;

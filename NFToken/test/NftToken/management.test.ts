@@ -7,7 +7,7 @@ import { assertIsAvailableOnlyForOwner, findEvent, txExec } from '../helpers/uti
 import { TestContext } from './TestContext';
 
 
-describe('Management', async() => {
+describe('Management', () => {
     let owner : SignerWithAddress;
     let alice : SignerWithAddress;
     let bob : SignerWithAddress;
@@ -30,7 +30,7 @@ describe('Management', async() => {
     });
     
     
-    describe('Token info', async() => {
+    describe('Token info', () => {
         
         it('Should expose proper values', async() => {
             const name = await nftToken.name();
@@ -82,7 +82,7 @@ describe('Management', async() => {
         
     });
     
-    describe('Change base URI', async() => {
+    describe('Change base URI', () => {
         const newURL = 'https://other.eth/t/';
         
         it('Should allow to execute only by owner', async() => {

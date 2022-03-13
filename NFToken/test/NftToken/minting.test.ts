@@ -6,7 +6,7 @@ import { assertIsAvailableOnlyForOwner, findEvent, txExec } from '../helpers/uti
 import { TestContext } from './TestContext';
 
 
-describe('Minting', async() => {
+describe('Minting', () => {
     let owner : SignerWithAddress;
     let alice : SignerWithAddress;
     let bob : SignerWithAddress;

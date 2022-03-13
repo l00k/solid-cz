@@ -12,7 +12,7 @@ const contractsToTest = [
 
 contractsToTest.forEach(contractName => {
     
-    describe(`${contractName} is Ownable`, async() => {
+    describe(`${contractName} is Ownable`, () => {
         let owner : SignerWithAddress;
         let alice : SignerWithAddress;
         let bob : SignerWithAddress;

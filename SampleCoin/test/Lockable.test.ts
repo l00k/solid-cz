@@ -12,7 +12,7 @@ const contractsToTest = [
 
 contractsToTest.forEach(contractName => {
     
-    describe(`${contractName} is Lockable`, async() => {
+    describe(`${contractName} is Lockable`, () => {
         let owner : SignerWithAddress;
         let alice : SignerWithAddress;
         let bob : SignerWithAddress;
