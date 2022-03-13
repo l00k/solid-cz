@@ -283,7 +283,7 @@ contract Borrowing is
         IERC20Metadata token,
         address account,
         uint256 amount
-    ) internal
+    ) internal virtual
     {
         _decreaseAccountDebit(token, account, amount);
 

@@ -6,6 +6,7 @@ import {
     LoanOpenedEvent, LoanPartiallyRepaidEvent, LiquidatedEvent, LiquidatedTokenEvent
 } from '@/LendingProtocol';
 import { PriceFeedMock } from '@/PriceFeedMock';
+import { ContractReceipt } from '@ethersproject/contracts/src.ts/index';
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
 import { expect } from 'chai';
 import { BigNumber, ContractTransaction } from 'ethers';
@@ -333,7 +334,7 @@ describe('Liquidations component', () => {
 
             // with liquidation incentive configured
             // with liquidity provided by Alice
-            describe('with Alice borrowed funds', () => {
+            describe('with Alice borrowed one asset', () => {
                 beforeEach(async() => {
                     await txExec(
                         mainContract
@@ -363,7 +364,7 @@ describe('Liquidations component', () => {
 
                 // with liquidation incentive configured
                 // with liquidity provided by Alice
-                // with Alice borrowed funds
+                // with Alice borrowed one asset
                 describe('with collateral asset price drop (liquidation of part of deposit)', () => {
                     beforeEach(async() => {
                         await pushNewPriceIntoFeed(
@@ -385,13 +386,18 @@ describe('Liquidations component', () => {
                     
                     
                     describe('liquidating', () => {
-                        it('Should emit Liquidated event', async() => {
-                            const [ tx, result ] = await txExec(
+                        let tx : ContractTransaction;
+                        let result : ContractReceipt;
+                        
+                        beforeEach(async() => {
+                            [ tx, result ] = await txExec(
                                 mainContract
                                     .connect(owner)
                                     .liquidate(alice.address)
                             );
-                        
+                        });
+                    
+                        it('Should emit Liquidated event', async() => {
                             await assertEvent<LiquidatedEvent>(result, 'Liquidated', {
                                 who: alice.address,
                                 value: ethers.utils.parseUnits('330', 8),
@@ -399,12 +405,6 @@ describe('Liquidations component', () => {
                         });
                         
                         it('Should emit LiquidatedToken events', async() => {
-                            const [ tx, result ] = await txExec(
-                                mainContract
-                                    .connect(owner)
-                                    .liquidate(alice.address)
-                            );
-                        
                             // 330 / 1 = 330 (max 40)
                             await assertEvent<LiquidatedTokenEvent>(result, 'LiquidatedToken', {
                                 who: alice.address,
@@ -419,25 +419,275 @@ describe('Liquidations component', () => {
                                 amount: ethers.utils.parseUnits('29', 18),
                             }, 1);
                         });
+                        
+                        it('Should emit LoanPartiallyRepaid event', async() => {
+                            await assertEvent<LoanPartiallyRepaidEvent>(result, 'LoanPartiallyRepaid', {
+                                who: alice.address,
+                                token: smplToken2.address,
+                                amount: ethers.utils.parseUnits('30', 18),
+                            });
+                        });
+                        
+                        it('Should emit LoanFullyRepaid event', async() => {
+                            await assertEvent<LoanFullyRepaidEvent>(result, 'LoanFullyRepaid', {
+                                who: alice.address,
+                                token: smplToken2.address,
+                            });
+                        });
+                        
+                        it('Should reduce deposit', async() => {
+                            const deposit = await mainContract.getAccountTokenDeposit(smplToken.address, alice.address);
+                            expect(deposit).to.be.equal(0);
+                            
+                            const deposit2 = await mainContract.getAccountTokenDeposit(smplToken2.address, alice.address);
+                            expect(deposit2).to.be.equal(ethers.utils.parseUnits('21', 18));
+                            
+                            const deposit3 = await mainContract.getAccountTokenDeposit(smplToken3.address, alice.address);
+                            expect(deposit3).to.be.equal(ethers.utils.parseUnits('50', 18));
+                        });
+
+                        it('Should return proper account liquidity', async() => {
+                            const amount = await mainContract.getAccountLiquidity(alice.address);
+                            // [(21 * 10 * 0.5) + (50 * 1 * 0.5)]
+                            expect(amount).to.be.equal(ethers.utils.parseUnits('130', 8));
+                        });
+                    });
+                });
+                
+
+                // with liquidation incentive configured
+                // with liquidity provided by Alice
+                // with Alice borrowed one asset
+                describe('with collateral asset price drop (liquidation of entire deposit)', () => {
+                    beforeEach(async() => {
+                        // first withdraw deposit
+                        await txExec(
+                            mainContract
+                                .connect(alice)
+                                .withdraw(
+                                    smplToken2.address,
+                                    ethers.utils.parseUnits('49', 18)
+                                )
+                        );
+                    
+                        await pushNewPriceIntoFeed(
+                            priceFeedContract,
+                            ethers.utils.parseUnits('1', 8)
+                        );
+                        
+                        await pushNewPriceIntoFeed(
+                            priceFeedContract3,
+                            ethers.utils.parseUnits('1', 8)
+                        );
+                    });
+
+                    it('Should return proper account liquidity', async() => {
+                        const amount = await mainContract.getAccountLiquidity(alice.address);
+                        // [(40 * 1 * 0.5) + (1 * 10 * 0.5) + (50 * 1 * 0.5)] - (30 * 10 * 1.1)
+                        expect(amount).to.be.equal(ethers.utils.parseUnits('-280', 8));
+                    });
+                    
+                    
+                    describe('liquidating', () => {
+                        let tx : ContractTransaction;
+                        let result : ContractReceipt;
+                        
+                        beforeEach(async() => {
+                            [ tx, result ] = await txExec(
+                                mainContract
+                                    .connect(owner)
+                                    .liquidate(alice.address)
+                            );
+                        });
+                        
+                        it('Should emit LiquidatedToken events', async() => {
+                            // 330 / 1 = 330 (max 40)
+                            await assertEvent<LiquidatedTokenEvent>(result, 'LiquidatedToken', {
+                                who: alice.address,
+                                token: smplToken.address,
+                                amount: ethers.utils.parseUnits('40', 18),
+                            });
+                        
+                            // [330 - (40 * 1)] / 10 = 29 (max 1)
+                            await assertEvent<LiquidatedTokenEvent>(result, 'LiquidatedToken', {
+                                who: alice.address,
+                                token: smplToken2.address,
+                                amount: ethers.utils.parseUnits('1', 18),
+                            }, 1);
+                        
+                            // [330 - (40 * 1) - (1 * 10)] / 1 = 280 (max 50)
+                            await assertEvent<LiquidatedTokenEvent>(result, 'LiquidatedToken', {
+                                who: alice.address,
+                                token: smplToken3.address,
+                                amount: ethers.utils.parseUnits('50', 18),
+                            }, 2);
+                        });
+                        
+                        it('Should reduce deposit', async() => {
+                            const deposit = await mainContract.getAccountTokenDeposit(smplToken.address, alice.address);
+                            expect(deposit).to.be.equal(0);
+                            
+                            const deposit2 = await mainContract.getAccountTokenDeposit(smplToken2.address, alice.address);
+                            expect(deposit2).to.be.equal(0);
+                            
+                            const deposit3 = await mainContract.getAccountTokenDeposit(smplToken3.address, alice.address);
+                            expect(deposit3).to.be.equal(0);
+                        });
                     });
                 });
 
 
                 // with liquidation incentive configured
                 // with liquidity provided by Alice
-                // with Alice borrowed funds
+                // with Alice borrowed one asset
                 describe('with borrowed asset price increase', () => {
                     beforeEach(async() => {
                         await pushNewPriceIntoFeed(
                             priceFeedContract2,
-                            ethers.utils.parseUnits('57', 6)
+                            ethers.utils.parseUnits('100', 8)
                         );
                     })
+
+                    it('Should return proper account liquidity', async() => {
+                        const amount = await mainContract.getAccountLiquidity(alice.address);
+                        // [(40 * 25 * 0.5) + (50 * 100 * 0.5) + (50 * 10 * 0.5)] - (30 * 100 * 1.1)
+                        expect(amount).to.be.equal(ethers.utils.parseUnits('-50', 8));
+                    });
                     
                     
                     describe('liquidating', () => {
+                        it('Should emit Liquidated event', async() => {
+                            const [ tx, result ] = await txExec(
+                                mainContract
+                                    .connect(owner)
+                                    .liquidate(alice.address)
+                            );
+                            
+                            await assertEvent<LiquidatedEvent>(result, 'Liquidated', {
+                                who: alice.address,
+                                value: ethers.utils.parseUnits('3300', 8),
+                            });
+                        });
+                    });
+                });
+
+
+                // with liquidation incentive configured
+                // with liquidity provided by Alice
+                // with Alice borrowed one asset
+                describe('with Alice borrowed second asset', () => {
+                    beforeEach(async() => {
+                        await txExec(
+                            mainContract
+                                .connect(alice)
+                                .borrow(
+                                    smplToken3.address,
+                                    ethers.utils.parseUnits('50', 18)
+                                )
+                        );
+                    })
+        
+                    it('Should return proper liquidation value', async() => {
+                        const amount = await mainContract.getAccountLiquidationValue(alice.address);
+                        // [ 30 * 10 + 50 * 10 ] * (1 + 0.1)
+                        expect(amount).to.be.equal(ethers.utils.parseUnits('880', 8));
+                    });
+    
+                    it('Should return proper account liquidity', async() => {
+                        const amount = await mainContract.getAccountLiquidity(alice.address);
+                        // 1000 - [ 30 * 10 + 50 * 10 ] * (1 + 0.1)
+                        expect(amount).to.be.equal(ethers.utils.parseUnits('120', 8));
+                    });
                     
+                    checkLiquidatingDoesNothing();
                     
+    
+                    // with liquidation incentive configured
+                    // with liquidity provided by Alice
+                    // with Alice borrowed one asset
+                    // with Alice borrowed second asset
+                    describe('with collateral asset price drop', () => {
+                        beforeEach(async() => {
+                            await pushNewPriceIntoFeed(
+                                priceFeedContract,
+                                ethers.utils.parseUnits('10', 8)
+                            );
+                        });
+    
+                        it('Should return proper account liquidity', async() => {
+                            const amount = await mainContract.getAccountLiquidity(alice.address);
+                            // [(40 * 10 * 0.5) + (50 * 10 * 0.5) + (50 * 10 * 0.5)] - [ 30 * 10 + 50 * 10 ] * (1 + 0.1)
+                            expect(amount).to.be.equal(ethers.utils.parseUnits('-180', 8));
+                        });
+                        
+                        
+                        describe('liquidating', () => {
+                            let tx : ContractTransaction;
+                            let result : ContractReceipt;
+                            
+                            beforeEach(async() => {
+                                [ tx, result ] = await txExec(
+                                    mainContract
+                                        .connect(owner)
+                                        .liquidate(alice.address)
+                                );
+                            });
+                        
+                            it('Should emit Liquidated event', async() => {
+                                await assertEvent<LiquidatedEvent>(result, 'Liquidated', {
+                                    who: alice.address,
+                                    value: ethers.utils.parseUnits('880', 8),
+                                });
+                            });
+                            
+                            it('Should emit LiquidatedToken events', async() => {
+                                // 880 / 10 = 88 (max 40)
+                                await assertEvent<LiquidatedTokenEvent>(result, 'LiquidatedToken', {
+                                    who: alice.address,
+                                    token: smplToken.address,
+                                    amount: ethers.utils.parseUnits('40', 18),
+                                });
+                            
+                                // [880 - (40 * 10)] / 10 = 48 (max 50)
+                                await assertEvent<LiquidatedTokenEvent>(result, 'LiquidatedToken', {
+                                    who: alice.address,
+                                    token: smplToken2.address,
+                                    amount: ethers.utils.parseUnits('48', 18),
+                                }, 1);
+                            });
+                            
+                            it('Should emit LoanPartiallyRepaid event', async() => {
+                                await assertEvent<LoanPartiallyRepaidEvent>(result, 'LoanPartiallyRepaid', {
+                                    who: alice.address,
+                                    token: smplToken2.address,
+                                    amount: ethers.utils.parseUnits('30', 18),
+                                });
+                            });
+                            
+                            it('Should emit LoanFullyRepaid event', async() => {
+                                await assertEvent<LoanFullyRepaidEvent>(result, 'LoanFullyRepaid', {
+                                    who: alice.address,
+                                    token: smplToken2.address,
+                                });
+                            });
+                            
+                            it('Should reduce deposit', async() => {
+                                const deposit = await mainContract.getAccountTokenDeposit(smplToken.address, alice.address);
+                                expect(deposit).to.be.equal(0);
+                                
+                                const deposit2 = await mainContract.getAccountTokenDeposit(smplToken2.address, alice.address);
+                                expect(deposit2).to.be.equal(ethers.utils.parseUnits('2', 18));
+                                
+                                const deposit3 = await mainContract.getAccountTokenDeposit(smplToken3.address, alice.address);
+                                expect(deposit3).to.be.equal(ethers.utils.parseUnits('50', 18));
+                            });
+    
+                            it('Should return proper account liquidity', async() => {
+                                const amount = await mainContract.getAccountLiquidity(alice.address);
+                                // (2 * 10 * 0.5) + (50 * 10 * 0.5)
+                                expect(amount).to.be.equal(ethers.utils.parseUnits('260', 8));
+                            });
+                        });
                     });
                 });
                 

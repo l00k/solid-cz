@@ -127,7 +127,7 @@ contract Liquidations is
 
             uint256 debit = getAccountTokenDebit(token, account);
             if (debit > 0) {
-                _decreaseAccountDebit(token, account, debit);
+                _repay(token, account, debit);
             }
         }
 
