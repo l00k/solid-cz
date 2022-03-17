@@ -1,24 +1,15 @@
-import { IERC20 } from '@/IERC20';
+import { TokenMock } from '@/TokenMock';
 import {
     LendingProtocol,
     PriceFeedChangedEvent,
-    SupportedAssetAddedEvent,
-    TokenActivityChangedEvent
+    SupportedAssetAddedEvent
 } from '@/LendingProtocol';
 import { PriceFeedMock } from '@/PriceFeedMock';
-import { ContractReceipt } from '@ethersproject/contracts/src.ts/index';
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
 import { expect } from 'chai';
-import { BigNumber, ContractTransaction } from 'ethers';
+import { BigNumber } from 'ethers';
 import { ethers } from 'hardhat';
-import {
-    assertEvent,
-    assertIsAvailableOnlyForOwner,
-    createTokenMock,
-    deployContract,
-    txExec
-} from './helpers/utils';
-import * as utils from './helpers/utils';
+import { assertEvent, assertIsAvailableOnlyForOwner, createTokenMock, deployContract, txExec } from './helpers/utils';
 
 
 const UPDATED_PRICEFEED_ADDRESS = '0x6Df09E975c830ECae5bd4eD9d90f3A95a4f88012';
@@ -27,19 +18,20 @@ const WBTC_ADDRESS = '0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599';
 const WBTC_PRICEFEED_ADDRESS = '0xF4030086522a5bEEa4988F8cA5B36dbC97BeE88c';
 
 
-xdescribe('Assets component', () => {
+describe('Assets component', () => {
     let owner : SignerWithAddress;
     let alice : SignerWithAddress;
     
     let mainContract : LendingProtocol;
-    let smplToken : IERC20;
+    let smplToken : TokenMock;
     let priceFeedContract : PriceFeedMock;
     
     
-    async function pushNewPriceIntoFeed(
+    async function pushNewPriceIntoFeed (
         priceFeedContract : PriceFeedMock,
         price : BigNumber
-    ) {
+    )
+    {
         return priceFeedContract
             .pushRoundData({
                 answer: price,
@@ -89,11 +81,6 @@ xdescribe('Assets component', () => {
             await expect(query).to.be.revertedWith('TokenIsNotSupported()');
         });
         
-        it('getTokenActive() should revert', async() => {
-            const query = mainContract.isTokenActive(smplToken.address);
-            await expect(query).to.be.revertedWith('TokenIsNotSupported()');
-        });
-        
         it('getTokenPrice() should revert', async() => {
             const query = mainContract.getTokenPrice(smplToken.address);
             await expect(query).to.be.revertedWith('TokenIsNotSupported()');
@@ -108,16 +95,6 @@ xdescribe('Assets component', () => {
                 );
             await expect(tx).to.revertedWith('TokenIsNotSupported()');
         });
-        
-        it('setTokenActive() should revert', async() => {
-            const tx = mainContract
-                .connect(owner)
-                .setTokenActive(
-                    smplToken.address,
-                    true
-                );
-            await expect(tx).to.revertedWith('TokenIsNotSupported()');
-        });
     });
     
     
@@ -128,8 +105,7 @@ xdescribe('Assets component', () => {
                     .connect(account)
                     .addSupportedAsset(
                         smplToken.address,
-                        priceFeedContract.address,
-                        true
+                        priceFeedContract.address
                     );
             });
         });
@@ -140,11 +116,10 @@ xdescribe('Assets component', () => {
                     .connect(owner)
                     .addSupportedAsset(
                         smplToken.address,
-                        priceFeedContract.address,
-                        true
+                        priceFeedContract.address
                     )
             );
-        
+            
             await assertEvent<SupportedAssetAddedEvent>(result, 'SupportedAssetAdded', {
                 token: smplToken.address
             });
@@ -157,12 +132,11 @@ xdescribe('Assets component', () => {
                         .connect(owner)
                         .addSupportedAsset(
                             smplToken.address,
-                            priceFeedContract.address,
-                            true
+                            priceFeedContract.address
                         )
                 );
             });
-        
+            
             it('Should return new item in getter', async() => {
                 const tokens = await mainContract.getSupportedTokens();
                 expect(tokens).to.include(smplToken.address);
@@ -177,11 +151,6 @@ xdescribe('Assets component', () => {
                 const priceFeed = await mainContract.getPriceFeed(smplToken.address);
                 expect(priceFeed).to.be.equal(priceFeedContract.address);
             });
-            
-            it('Should return token activity by token', async() => {
-                const active = await mainContract.isTokenActive(smplToken.address);
-                expect(active).to.be.equal(true);
-            });
         });
     });
     
@@ -194,8 +163,7 @@ xdescribe('Assets component', () => {
                     .connect(owner)
                     .addSupportedAsset(
                         smplToken.address,
-                        priceFeedContract.address,
-                        true
+                        priceFeedContract.address
                     )
             );
         });
@@ -205,20 +173,19 @@ xdescribe('Assets component', () => {
                 .connect(owner)
                 .addSupportedAsset(
                     smplToken.address,
-                    priceFeedContract.address,
-                    true
+                    priceFeedContract.address
                 );
             await expect(tx).to.be.revertedWith('TokenIsAlreadySupported()');
         });
-    
-    
+        
+        
         describe('Price fetching', () => {
             beforeEach(async() => {
                 await txExec(
                     pushNewPriceIntoFeed(priceFeedContract, ethers.utils.parseUnits('25', 8))
                 );
             });
-        
+            
             it('Should return token price', async() => {
                 const price = await mainContract.getTokenPrice(smplToken.address);
                 expect(price).to.be.equal(ethers.utils.parseUnits('25', 8));
@@ -273,69 +240,6 @@ xdescribe('Assets component', () => {
             });
         });
         
-        describe('Updating existing token activity', () => {
-            it('Should allow to execute only by owner', async() => {
-                await assertIsAvailableOnlyForOwner(async(account) => {
-                    return mainContract
-                        .connect(account)
-                        .setTokenActive(
-                            smplToken.address,
-                            false
-                        );
-                });
-            });
-            
-            it('Should revert with TokenIsNotSupported', async() => {
-                const tx = mainContract
-                    .connect(owner)
-                    .setTokenActive(
-                        WBTC_ADDRESS,
-                        false
-                    );
-                await expect(tx).to.be.revertedWith('TokenIsNotSupported()');
-            });
-            
-            it('Should emit event', async() => {
-                const [ tx, result ] = await txExec(
-                    mainContract
-                        .connect(owner)
-                        .setTokenActive(
-                            smplToken.address,
-                            false
-                        )
-                );
-            
-                await assertEvent<TokenActivityChangedEvent>(result, 'TokenActivityChanged', {
-                    token: smplToken.address,
-                    active: false
-                });
-            });
-            
-            
-            describe('successfully', () => {
-                beforeEach(async() => {
-                    await txExec(
-                        mainContract
-                            .connect(owner)
-                            .setTokenActive(
-                                smplToken.address,
-                                false
-                            )
-                    );
-                });
-                
-                it('Should return updated item in getter', async() => {
-                    const tokens = await mainContract.getSupportedTokens();
-                    expect(tokens).to.include(smplToken.address);
-                });
-                
-                it('Should return asset by token', async() => {
-                    const assetConfig = await mainContract.isTokenActive(smplToken.address);
-                    expect(assetConfig).to.be.equal(false);
-                });
-            });
-        });
     });
-    
     
 });

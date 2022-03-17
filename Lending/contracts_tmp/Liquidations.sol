@@ -3,9 +3,11 @@ pragma solidity ^0.8.0;
 
 import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import "./Borrowing.sol";
+import "./PlatformTresoury.sol";
 
 
 contract Liquidations is
+    PlatformTresoury,
     Borrowing
 {
 
@@ -52,11 +54,11 @@ contract Liquidations is
      * @dev
      * Liquidity should be reduced with liquidation incentive factor
      */
-    function getAccountLiquidity(
+    function getAccountCollateralization(
         address account
-    ) public view virtual override returns (int256)
+    ) public view virtual override(Deposits, Borrowing) returns (int256)
     {
-        return super.getAccountLiquidity(account)
+        return super.getAccountCollateralization(account)
             - int256(_getAccountLiquidationIncentiveValue(account))
             ;
     }
@@ -70,11 +72,23 @@ contract Liquidations is
         emit LiquidationIncentiveChanged(liquidationIncentive);
     }
 
+    /**
+     * @inheritdoc Borrowing
+     */
+    function _beforeWithdraw(
+        IERC20Metadata token,
+        uint256 amount
+    ) internal virtual override(Deposits, Borrowing)
+    {
+        Borrowing._beforeWithdraw(token, amount);
+    }
+
+
     function liquidate(
         address account
     ) public
     {
-        int256 liquidity = getAccountLiquidity(account);
+        int256 liquidity = getAccountCollateralization(account);
         if (liquidity >= 0) {
             return;
         }
@@ -107,8 +121,8 @@ contract Liquidations is
             //      * tokenPrice (8 digits precise)
             uint256 partialLiquidationValue = liquidationAmount * getTokenPrice(token) / (10 ** tokenDecimals);
 
-            // reduce deposit
-            _decreaseAccountDeposit(
+            // liquidate account deposit
+            _decreaseDepositShares(
                 token,
                 account,
                 liquidationAmount

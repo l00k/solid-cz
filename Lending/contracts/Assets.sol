@@ -12,18 +12,15 @@ contract Assets is
 
     error TokenIsAlreadySupported();
     error TokenIsNotSupported();
-    error AssetIsNotActive();
 
     event SupportedAssetAdded(IERC20Metadata token);
     event PriceFeedChanged(IERC20Metadata token, AggregatorV3Interface priceFeed);
-    event TokenActivityChanged(IERC20Metadata token, bool active);
 
 
     IERC20Metadata[] private _tokens;
 
     mapping(IERC20Metadata => bool) private _tokenSupported;
     mapping(IERC20Metadata => AggregatorV3Interface) private _priceFeeds;
-    mapping(IERC20Metadata => bool) private _tokenActive;
 
 
 
@@ -37,26 +34,27 @@ contract Assets is
         return _tokenSupported[token];
     }
 
-    function getPriceFeed(IERC20Metadata token) public view returns (AggregatorV3Interface)
+    function getPriceFeed(IERC20Metadata token) public view onlySupportedAsset(token) returns (AggregatorV3Interface)
     {
-        _verifyTokenSupported(token);
         return _priceFeeds[token];
     }
 
-    function isTokenActive(IERC20Metadata token) public view returns (bool)
+
+    modifier onlySupportedAsset(IERC20Metadata token)
     {
-        _verifyTokenSupported(token);
-        return _tokenActive[token];
+        if (!isTokenSupported(token)) {
+            revert TokenIsNotSupported();
+        }
+        _;
     }
+
 
     /**
      * @dev Returns token price
      * Normalized to 8 digits precission
      */
-    function getTokenPrice(IERC20Metadata token) public view returns (uint256)
+    function getTokenPrice(IERC20Metadata token) public view onlySupportedAsset(token) returns (uint256)
     {
-        _verifyTokenSupported(token);
-
         AggregatorV3Interface priceFeed = getPriceFeed(token);
 
         uint8 decimals = priceFeed.decimals();
@@ -71,8 +69,7 @@ contract Assets is
 
     function addSupportedAsset(
         IERC20Metadata token,
-        AggregatorV3Interface priceFeed,
-        bool active
+        AggregatorV3Interface priceFeed
     ) public
         onlyOwner
     {
@@ -84,7 +81,6 @@ contract Assets is
         _tokenSupported[token] = true;
 
         _priceFeeds[token] = priceFeed;
-        _tokenActive[token] = active;
 
         emit SupportedAssetAdded(token);
     }
@@ -93,41 +89,12 @@ contract Assets is
         IERC20Metadata token,
         AggregatorV3Interface priceFeed
     ) public
+        onlySupportedAsset(token)
         onlyOwner
     {
-        _verifyTokenSupported(token);
-
         _priceFeeds[token] = priceFeed;
 
         emit PriceFeedChanged(token, priceFeed);
-    }
-
-    function setTokenActive(
-        IERC20Metadata token,
-        bool active
-    ) public
-        onlyOwner
-    {
-        _verifyTokenSupported(token);
-
-        _tokenActive[token] = active;
-
-        emit TokenActivityChanged(token, active);
-    }
-
-
-    function _verifyTokenSupported(IERC20Metadata token) internal view
-    {
-        if (!isTokenSupported(token)) {
-            revert TokenIsNotSupported();
-        }
-    }
-
-    function _verifyAssetActive(IERC20Metadata token) internal view
-    {
-        if (!isTokenActive(token)) {
-            revert AssetIsNotActive();
-        }
     }
 
 }

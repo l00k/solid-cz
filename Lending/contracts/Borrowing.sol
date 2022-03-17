@@ -2,77 +2,58 @@
 pragma solidity ^0.8.0;
 
 import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
-import "./Deposits.sol";
+import "./PlatformTresoury.sol";
 
 
 contract Borrowing is
-    Deposits
+    PlatformTresoury
 {
 
     error ZeroTokenPrice();
-    error AmountExceedWithdrawableLimit();
     error AmountExceedBorrowableLimit();
 
-    event BorrowableFractionChanged(IERC20Metadata token, uint32 fraction);
     event LoanOpened(address who, IERC20Metadata token, uint256 amount);
     event LoanPartiallyRepaid(address who, IERC20Metadata token, uint256 amount);
     event LoanFullyRepaid(address who, IERC20Metadata token);
 
 
-    // 1 = 0.0001%
-    mapping(IERC20Metadata => uint32) private _tokenBorrowableFractions;
-
-    // account => token => uint256
-    mapping(address => mapping(IERC20Metadata => uint256)) private _accountDebit;
-
     // token => uint256
     mapping(IERC20Metadata => uint256) private _totalDebit;
 
+    // debit shares model
+    mapping(IERC20Metadata => mapping(address => uint256)) private _accountDebitShares;
+    mapping(IERC20Metadata => uint256) private _totalDebitShares;
+
+
+
+    function getTotalTokenDebit(IERC20Metadata token) public view onlySupportedAsset(token) returns (uint256)
+    {
+        return _totalDebit[token];
+    }
 
     function getAccountTokenDebit(
         IERC20Metadata token,
         address account
-    ) public view virtual returns (uint256)
+    ) public view virtual onlySupportedAsset(token) returns (uint256)
     {
-        _verifyTokenSupported(token);
+        if (_totalDebitShares[token] == 0) {
+            return 0;
+        }
 
-        return _accountDebit[account][token];
-    }
-
-    function getTotalTokenDebit(IERC20Metadata token) public view returns (uint256)
-    {
-        _verifyTokenSupported(token);
-        return _totalDebit[token];
-    }
-
-    /**
-     * @dev
-     * Liqudity factor limits total amount of funds which can be borrowed by users
-     */
-    function getTokenBorrowableFraction(IERC20Metadata token) public view returns (uint32)
-    {
-        _verifyTokenSupported(token);
-        return _tokenBorrowableFractions[token];
+        return _accountDebitShares[token][account]
+            * _totalDebit[token]
+            / _totalDebitShares[token];
     }
 
     /**
      * @dev
-     * Returns total amount of deposit tokens reduced by liqudity factor
+     * Returns total amount of non utilised tokens which are available to borrow
      */
     function getTotalTokenBorrowable(
         IERC20Metadata token
-    ) public view returns (uint256)
+    ) public view onlySupportedAsset(token) returns (uint256)
     {
-        _verifyTokenSupported(token);
-        _verifyAssetActive(token);
-
-        uint256 tokenDeposits = getTotalTokenDeposit(token);
-        uint32 tokenBorrowableFraction = getTokenBorrowableFraction(token);
-        uint256 totalBorrowable = tokenDeposits * tokenBorrowableFraction / 1e6;
-
-        uint256 tokenBorrowed = getTotalTokenDebit(token);
-
-        return totalBorrowable - tokenBorrowed;
+        return getTotalTokenDeposit(token) - getTotalTokenDebit(token);
     }
 
     /**
@@ -83,11 +64,8 @@ contract Borrowing is
     function getAccountTokenBorrowable(
         IERC20Metadata token,
         address account
-    ) public view returns (uint256)
+    ) public view onlySupportedAsset(token) returns (uint256)
     {
-        _verifyTokenSupported(token);
-        _verifyAssetActive(token);
-
         uint256 borrowableTotal = getTotalTokenBorrowable(token);
         if (borrowableTotal == 0) {
             return 0;
@@ -96,7 +74,7 @@ contract Borrowing is
         uint8 tokenDecimals = token.decimals();
         uint256 tokenPrice = getTokenPrice(token);
 
-        int256 accountLiquidity = getAccountLiquidity(account);
+        int256 accountLiquidity = getAccountCollateralization(account);
         if (accountLiquidity <= 0) {
             return 0;
         }
@@ -104,12 +82,12 @@ contract Borrowing is
         // borrowableAmount(<tokenDecimals> digits precise) =
         //      accountLiquidity(8 digits precise)
         //      / tokenPrice(8 digits precise)
-        uint256 borrowableAmount = uint256(accountLiquidity) * (10 ** tokenDecimals)
+        uint256 maxBorrowable = uint256(accountLiquidity) * (10 ** tokenDecimals)
             / tokenPrice;
 
-        return borrowableAmount > borrowableTotal
-            ? borrowableTotal
-            : borrowableAmount;
+        return maxBorrowable < borrowableTotal
+            ? maxBorrowable
+            : borrowableTotal;
     }
 
     /**
@@ -149,99 +127,121 @@ contract Borrowing is
      * @inheritdoc Deposits
      *
      * @dev
-     * Liquidity should be reduced with borrowed amount
+     * Collateralization should be reduced with borrowed assets value
      * It may return negative value if total debit is larger than account deposit liquditiy
      */
-    function getAccountLiquidity(
+    function getAccountCollateralization(
         address account
     ) public view virtual override returns (int256)
     {
-        return super.getAccountLiquidity(account)
+        return super.getAccountCollateralization(account)
             - int256(getAccountDebitValue(account))
             ;
     }
 
     /**
      * @dev
-     * Amount of funds available to withdraw should be limited by open loans
+     * Amount of funds available to withdraw
+     * Limited by current open loans by account
      */
     function getAccountTokenWithdrawable(
         IERC20Metadata token,
         address account
-    ) public view virtual returns (uint256)
+    ) public view virtual override
+        onlySupportedAsset(token)
+        returns (uint256)
     {
-        _verifyTokenSupported(token);
-
-        uint256 deposit = super.getAccountTokenDeposit(token, account);
+        uint256 deposit = getAccountTokenDeposit(token, account);
         if (deposit == 0) {
             return 0;
         }
 
-        int256 liquidity = getAccountLiquidity(account);
-        if (liquidity <= 0) {
+        int256 liquidity = getAccountCollateralization(account);
+        if (liquidity < 0) {
             return 0;
         }
 
         uint32 collateralFactor = getTokenCollateralFactor(token);
-        uint8 tokenDecimals = token.decimals();
-        uint256 tokenPrice = getTokenPrice(token);
 
-        // withdrawable(<tokenDecimals> digits precise) =
-        //      liquidity (8 digits precise)
-        //      / collateralFactor(6 digits precise)
-        //      / tokenPrice (8 digits precise)
-        uint256 maxWithdrawable = uint256(liquidity) * (10 ** (tokenDecimals + 6))
-            / collateralFactor
-            / tokenPrice;
+        if (collateralFactor > 0) {
+            uint8 tokenDecimals = token.decimals();
+            uint256 tokenPrice = getTokenPrice(token);
 
-        return deposit <= maxWithdrawable
-            ? deposit
-            : maxWithdrawable;
+            // maxWithdrawable(<tokenDecimals> digits precise) =
+            //      liquidity (8 digits precise)
+            //      / collateralFactor(6 digits precise)
+            //      / tokenPrice (8 digits precise)
+            uint256 maxWithdrawable = uint256(liquidity) * (10 ** (tokenDecimals + 6))
+                / collateralFactor
+                / tokenPrice;
+
+            // limit to deposit amount
+            return maxWithdrawable < deposit
+                ? maxWithdrawable
+                : deposit;
+        }
+        else {
+            // in case token asset is not collateral (factor = 0) entire deposit is withdrawable
+            return deposit;
+        }
     }
 
-
-
-    function setTokenBorrowableFraction(
+    function _increaseTotalDebit(
         IERC20Metadata token,
-        uint32 borrowableFraction
-    ) public
-        onlyOwner
-    {
-        _verifyTokenSupported(token);
-
-        _tokenBorrowableFractions[token] = borrowableFraction;
-
-        emit BorrowableFractionChanged(token, borrowableFraction);
-    }
-
-    function _increaseAccountDebit(
-        IERC20Metadata token,
-        address account,
         uint256 amount
     ) internal
     {
         _totalDebit[token] += amount;
-        _accountDebit[account][token] += amount;
     }
 
-    function _decreaseAccountDebit(
+    function _decreaseTotalDebit(
         IERC20Metadata token,
-        address account,
         uint256 amount
     ) internal
     {
         _totalDebit[token] -= amount;
-        _accountDebit[account][token] -= amount;
     }
+
+    function _increaseDebitShares(
+        IERC20Metadata token,
+        address account,
+        uint256 amount
+    ) internal virtual
+    {
+        // sushibar shares
+        uint256 share;
+
+        if (_totalDebitShares[token] == 0 || _totalDebit[token] == 0) {
+            share = amount;
+        }
+        else {
+            share = amount * _totalDebitShares[token] / _totalDebit[token];
+        }
+
+        _accountDebitShares[token][account] += share;
+        _totalDebitShares[token] += share;
+    }
+
+    function _decreaseDebitShares(
+        IERC20Metadata token,
+        address account,
+        uint256 amount
+    ) internal virtual
+    {
+        // sushibar shares
+        uint256 share = _accountDebitShares[token][account] * amount / getAccountTokenDebit(token, account);
+
+        _accountDebitShares[token][account] -= share;
+        _totalDebitShares[token] -= share;
+    }
+
 
     function borrow(
         IERC20Metadata token,
         uint256 amount
     ) public
+        onlySupportedAsset(token)
     {
-        _verifyTokenSupported(token);
-        _verifyAssetActive(token);
-
         uint256 borrowable = getAccountTokenBorrowable(
             token,
             msg.sender
@@ -250,7 +250,14 @@ contract Borrowing is
             revert AmountExceedBorrowableLimit();
         }
 
-        _increaseAccountDebit(token, msg.sender, amount);
+        _beforeBorrow(token, amount);
+
+        _increaseDebitShares(
+            token,
+            msg.sender,
+            amount
+        );
+        _increaseTotalDebit(token, amount);
 
         bool result = token.transfer(msg.sender, amount);
         /* istanbul ignore if */
@@ -258,56 +265,62 @@ contract Borrowing is
             revert CouldNotTransferFunds();
         }
 
+        _afterBorrow(token, amount);
+
         emit LoanOpened(msg.sender, token, amount);
     }
 
+    function _beforeBorrow(IERC20Metadata token, uint256 amount) internal virtual {}
+    function _afterBorrow(IERC20Metadata token, uint256 amount) internal virtual {}
+
+
     /**
      * @dev
-     * Before withdrawing ensure requested amount not exceed withdrawable amount
+     * Internal repay method available for methods of payments non involving transfers
      */
-    function _beforeWithdraw(
-        IERC20Metadata token,
-        uint256 amount
-    ) internal virtual override
-    {
-        super._beforeWithdraw(token, amount);
-
-        uint256 withdrawable = getAccountTokenWithdrawable(token, msg.sender);
-        if (amount > withdrawable) {
-            revert AmountExceedWithdrawableLimit();
-        }
-    }
-
-
     function _repay(
         IERC20Metadata token,
         address account,
         uint256 amount
-    ) internal virtual
+    ) internal
     {
-        _decreaseAccountDebit(token, account, amount);
+        _beforeRepay(token, amount);
+
+        // reduce debit share
+        _decreaseDebitShares(
+            token,
+            msg.sender,
+            amount
+        );
+        _decreaseTotalDebit(token, amount);
+
+        _afterRepay(token, amount);
 
         emit LoanPartiallyRepaid(account, token, amount);
 
-        if (_accountDebit[account][token] == 0) {
+        if (_accountDebitShares[token][account] == 0) {
             emit LoanFullyRepaid(account, token);
         }
     }
+
+    function _beforeRepay(IERC20Metadata token, uint256 amount) internal virtual {}
+    function _afterRepay(IERC20Metadata token, uint256 amount) internal virtual {}
+
 
     function repay(
         IERC20Metadata token,
         uint256 amount
     ) public
+        onlySupportedAsset(token)
     {
-        _verifyTokenSupported(token);
-
         uint256 debit = getAccountTokenDebit(token, msg.sender);
-        if (debit == 0) {
-            return;
-        }
         if (amount >= debit) {
             // reduce amount
             amount = debit;
+        }
+        if (debit == 0) {
+            // no need for repayment
+            return;
         }
 
         // check allowance

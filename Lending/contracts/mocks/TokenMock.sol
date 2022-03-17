@@ -11,6 +11,7 @@ contract TokenMock is
 {
 
     uint8 private _decimals;
+    bool private _returnFalseOnTransfer;
 
     constructor(
         string memory name_,
@@ -27,6 +28,38 @@ contract TokenMock is
     function decimals() public view override(IERC20Metadata, ERC20) returns (uint8)
     {
         return _decimals;
+    }
+
+    function setReturnFalseOnTransfer(
+        bool returnFalseOnTransfer
+    ) public
+    {
+        _returnFalseOnTransfer = returnFalseOnTransfer;
+    }
+
+    function transfer(
+        address to,
+        uint256 amount
+    ) public virtual override(IERC20, ERC20) returns (bool)
+    {
+        if (_returnFalseOnTransfer) {
+            return false;
+        }
+
+        return ERC20.transfer(to, amount);
+    }
+
+    function transferFrom(
+        address from,
+        address to,
+        uint256 amount
+    ) public virtual override(IERC20, ERC20) returns (bool)
+    {
+        if (_returnFalseOnTransfer) {
+            return false;
+        }
+
+        return ERC20.transferFrom(from, to, amount);
     }
 
 }

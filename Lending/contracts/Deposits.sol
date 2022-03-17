@@ -10,8 +10,9 @@ contract Deposits is
 {
 
     error InsufficientAllowance();
-    error AmountExceedDeposit();
     error CouldNotTransferFunds();
+    error AmountExceedWithdrawableLimit();
+    error AmountExceedLiquidDeposit();
 
     event CollateralFactorChanged(IERC20Metadata token, uint32 factor);
     event AssetDeposited(address who, IERC20Metadata token, uint256 amount);
@@ -21,35 +22,65 @@ contract Deposits is
     // 1 = 0.0001%
     mapping(IERC20Metadata => uint32) private _tokenCollateralFactors;
 
-    // token => deposits
-    mapping(IERC20Metadata => uint256) private _totalDeposits;
+    // token => total deposits
+    mapping(IERC20Metadata => uint256) private _totalDeposit;
 
-    // account => token => deposit
-    mapping(address => mapping(IERC20Metadata => uint256)) private _accountDeposit;
+    // deposit shares model
+    mapping(IERC20Metadata => mapping(address => uint256)) private _accountDepositShares;
+    mapping(IERC20Metadata => uint256) private _totalDepositShares;
 
 
-    function getTokenCollateralFactor(IERC20Metadata token) public view returns (uint32)
+
+    function getTokenCollateralFactor(IERC20Metadata token) public view onlySupportedAsset(token) returns (uint32)
     {
-        _verifyTokenSupported(token);
         return _tokenCollateralFactors[token];
     }
+
 
     function getAccountTokenDeposit(
         IERC20Metadata token,
         address account
-    ) public view returns (uint256)
+    ) public view onlySupportedAsset(token) returns (uint256)
     {
-        _verifyTokenSupported(token);
-        return _accountDeposit[account][token];
+        if (_totalDepositShares[token] == 0) {
+            return 0;
+        }
+
+        return _totalDeposit[token]
+            * _accountDepositShares[token][account]
+            / _totalDepositShares[token];
     }
 
     function getTotalTokenDeposit(
         IERC20Metadata token
-    ) public view returns (uint256)
+    ) public view onlySupportedAsset(token) returns (uint256)
     {
-        _verifyTokenSupported(token);
-        return _totalDeposits[token];
+        return _totalDeposit[token];
     }
+
+    /**
+     * @dev
+     * Returns amount of tokens available to transfer from contract
+     */
+    function getTokenLiquidAmount(
+        IERC20Metadata token
+    ) public view onlySupportedAsset(token) returns (uint256)
+    {
+        return token.balanceOf(address(this));
+    }
+
+    /**
+     * @dev
+     * Returns amount of funds available to withdraw
+     */
+    function getAccountTokenWithdrawable(
+        IERC20Metadata token,
+        address account
+    ) public view virtual onlySupportedAsset(token) returns (uint256)
+    {
+        return getAccountTokenDeposit(token, account);
+    }
+
 
     /**
      * @dev
@@ -102,7 +133,7 @@ contract Deposits is
      * Returns value of account assets considering collateral factor
      * Precision: 8 digits
      */
-    function getAccountLiquidity(
+    function getAccountCollateralization(
         address account
     ) public view virtual returns (int256)
     {
@@ -130,43 +161,71 @@ contract Deposits is
         IERC20Metadata token,
         uint32 collateralFactor
     ) public
+        onlySupportedAsset(token)
         onlyOwner
     {
-        _verifyTokenSupported(token);
-
         _tokenCollateralFactors[token] = collateralFactor;
 
         emit CollateralFactorChanged(token, collateralFactor);
     }
 
-    function _increaseAccountDeposit(
+
+    function _increaseTotalDeposit(
         IERC20Metadata token,
-        address account,
         uint256 amount
     ) internal
     {
-        _totalDeposits[token] += amount;
-        _accountDeposit[account][token] += amount;
+        _totalDeposit[token] += amount;
     }
 
-    function _decreaseAccountDeposit(
+    function _decreaseTotalDeposit(
         IERC20Metadata token,
-        address account,
         uint256 amount
     ) internal
     {
-        _totalDeposits[token] -= amount;
-        _accountDeposit[account][token] -= amount;
+        _totalDeposit[token] -= amount;
     }
+
+    function _increaseDepositShares(
+        IERC20Metadata token,
+        address account,
+        uint256 amount
+    ) internal virtual
+    {
+        // sushibar shares
+        uint256 share;
+
+        if (_totalDepositShares[token] == 0 || _totalDeposit[token] == 0) {
+            share = amount;
+        }
+        else {
+            share = amount * _totalDepositShares[token] / _totalDeposit[token];
+        }
+
+        _accountDepositShares[token][account] += share;
+        _totalDepositShares[token] += share;
+    }
+
+    function _decreaseDepositShares(
+        IERC20Metadata token,
+        address account,
+        uint256 amount
+    ) internal virtual
+    {
+        // sushibar shares
+        uint256 share = _accountDepositShares[token][account] * amount / getAccountTokenDeposit(token, account);
+
+        _accountDepositShares[token][account] -= share;
+        _totalDepositShares[token] -= share;
+    }
+
 
     function deposit(
         IERC20Metadata token,
         uint256 amount
     ) public
+        onlySupportedAsset(token)
     {
-        _verifyTokenSupported(token);
-        _verifyAssetActive(token);
-
         // check allowance
         uint256 allowed = token.allowance(msg.sender, address(this));
         if (amount > allowed) {
@@ -182,29 +241,61 @@ contract Deposits is
             revert CouldNotTransferFunds();
         }
 
-        _increaseAccountDeposit(
+        _increaseDepositShares(
             token,
             msg.sender,
             amount
         );
+        _increaseTotalDeposit(token, amount);
 
         emit AssetDeposited(msg.sender, token, amount);
 
         _afterDeposit(token, amount);
     }
 
-    function _beforeDeposit(
-        IERC20Metadata token,
-        uint256 amount
-    ) internal virtual
-    {
-    }
+    function _beforeDeposit(IERC20Metadata token, uint256 amount) internal virtual {}
+    function _afterDeposit(IERC20Metadata token, uint256 amount) internal virtual {}
 
-    function _afterDeposit(
+
+    function _withdraw(
         IERC20Metadata token,
+        address fromAccount,
+        address toAccount,
         uint256 amount
-    ) internal virtual
+    ) internal
+        onlySupportedAsset(token)
     {
+        // verify withdrawable amount
+        uint256 withdrawable = getAccountTokenWithdrawable(token, fromAccount);
+        if (amount > withdrawable) {
+            revert AmountExceedWithdrawableLimit();
+        }
+
+        // verify liquid amount
+        uint256 liquidAmount = getTokenLiquidAmount(token);
+        if (amount > liquidAmount) {
+            revert AmountExceedLiquidDeposit();
+        }
+
+        _beforeWithdraw(token, fromAccount, toAccount, amount);
+
+        _decreaseDepositShares(
+            token,
+            fromAccount,
+            amount
+        );
+        _decreaseTotalDeposit(token, amount);
+
+        // transfer funds
+        bool result = token.transfer(toAccount, amount);
+        /* istanbul ignore if */
+        if (!result) {
+            revert CouldNotTransferFunds();
+        }
+
+        emit AssetWithdrawn(fromAccount, token, amount);
+
+        _afterWithdraw(token, fromAccount, toAccount, amount);
     }
 
     function withdraw(
@@ -212,47 +303,16 @@ contract Deposits is
         uint256 amount
     ) public
     {
-        _verifyTokenSupported(token);
-
-        // check deposit
-        uint256 deposited = getAccountTokenDeposit(token, msg.sender);
-        if (amount > deposited) {
-            revert AmountExceedDeposit();
-        }
-
-        _beforeWithdraw(token, amount);
-
-        _decreaseAccountDeposit(
+        _withdraw(
             token,
+            msg.sender,
             msg.sender,
             amount
         );
-
-        // transfer funds
-        bool result = token.transfer(msg.sender, amount);
-        /* istanbul ignore if */
-        if (!result) {
-            revert CouldNotTransferFunds();
-        }
-
-        emit AssetWithdrawn(msg.sender, token, amount);
-
-        _afterWithdraw(token, amount);
     }
 
-    function _beforeWithdraw(
-        IERC20Metadata token,
-        uint256 amount
-    ) internal virtual
-    {
-    }
-
-    function _afterWithdraw(
-        IERC20Metadata token,
-        uint256 amount
-    ) internal virtual
-    {
-    }
+    function _beforeWithdraw(IERC20Metadata token, address fromAccount, address toAccount, uint256 amount) internal virtual {}
+    function _afterWithdraw(IERC20Metadata token, address fromAccount, address toAccount, uint256 amount) internal virtual {}
 
 
 }

@@ -1,4 +1,3 @@
-import { IERC20 } from '@/IERC20';
 import {
     AssetDepositedEvent,
     AssetWithdrawnEvent,
@@ -6,12 +5,11 @@ import {
     LendingProtocol
 } from '@/LendingProtocol';
 import { PriceFeedMock } from '@/PriceFeedMock';
-import { ContractReceipt } from '@ethersproject/contracts/src.ts/index';
+import { TokenMock } from '@/TokenMock';
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
 import { expect } from 'chai';
-import { BigNumber, ContractTransaction } from 'ethers';
+import { BigNumber } from 'ethers';
 import { ethers } from 'hardhat';
-import * as utils from './helpers/utils';
 import { assertEvent, assertIsAvailableOnlyForOwner, createTokenMock, deployContract, txExec } from './helpers/utils';
 
 const SMPL_PRICEFEED_ADDRESS = '0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419';
@@ -20,15 +18,15 @@ const WBTC_ADDRESS = '0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599';
 const WBTC_PRICEFEED_ADDRESS = '0xF4030086522a5bEEa4988F8cA5B36dbC97BeE88c';
 
 
-xdescribe('Deposits component', () => {
+describe('Deposits component', () => {
     let owner : SignerWithAddress;
     let alice : SignerWithAddress;
     let bob : SignerWithAddress;
     
     let mainContract : LendingProtocol;
     
-    let smplToken : IERC20;
-    let smplToken2 : IERC20;
+    let smplToken : TokenMock;
+    let smplToken2 : TokenMock;
     
     let priceFeedContract : PriceFeedMock;
     let priceFeedContract2 : PriceFeedMock;
@@ -36,7 +34,7 @@ xdescribe('Deposits component', () => {
     
     async function deposit (
         account : SignerWithAddress,
-        tokenContract : IERC20,
+        tokenContract : TokenMock,
         amount : BigNumber
     )
     {
@@ -109,8 +107,7 @@ xdescribe('Deposits component', () => {
                 .connect(owner)
                 .addSupportedAsset(
                     smplToken.address,
-                    priceFeedContract.address,
-                    true
+                    priceFeedContract.address
                 )
         );
         
@@ -119,8 +116,7 @@ xdescribe('Deposits component', () => {
                 .connect(owner)
                 .addSupportedAsset(
                     smplToken2.address,
-                    priceFeedContract2.address,
-                    true
+                    priceFeedContract2.address
                 )
         );
     });
@@ -143,7 +139,7 @@ xdescribe('Deposits component', () => {
         });
         
         it('Should return zero liquidity', async() => {
-            const liquidity = await mainContract.getAccountLiquidity(alice.address);
+            const liquidity = await mainContract.getAccountCollateralization(alice.address);
             expect(liquidity).to.be.equal(0);
         });
         
@@ -154,7 +150,7 @@ xdescribe('Deposits component', () => {
                     smplToken.address,
                     ethers.utils.parseUnits('1', 18)
                 );
-            await expect(tx).to.be.revertedWith('AmountExceedDeposit()');
+            await expect(tx).to.be.revertedWith('AmountExceedWithdrawableLimit()');
         });
     });
     
@@ -207,29 +203,6 @@ xdescribe('Deposits component', () => {
     });
     
     
-    describe('For non active token', () => {
-        beforeEach(async() => {
-            await txExec(
-                mainContract
-                    .connect(owner)
-                    .setTokenActive(
-                        smplToken.address,
-                        false
-                    )
-            );
-        });
-        
-        it('deposit() should revert', async() => {
-            const tx = deposit(
-                alice,
-                smplToken,
-                ethers.utils.parseUnits('1', 18)
-            );
-            await expect(tx).to.be.revertedWith('AssetIsNotActive()');
-        });
-    });
-    
-    
     describe('Changing collateral factor', () => {
         it('Should allow to execute only by owner', async() => {
             await assertIsAvailableOnlyForOwner(async(account) => {
@@ -251,7 +224,7 @@ xdescribe('Deposits component', () => {
                         1e5
                     )
             );
-        
+            
             await assertEvent<CollateralFactorChangedEvent>(result, 'CollateralFactorChanged', {
                 token: smplToken.address,
                 factor: 1e5,
@@ -320,6 +293,19 @@ xdescribe('Deposits component', () => {
                 await expect(tx).to.be.revertedWith('ERC20: transfer amount exceeds balance');
             });
             
+            it('Should revert when transfer fails', async() => {
+                await txExec(
+                    smplToken.setReturnFalseOnTransfer(true)
+                );
+                
+                const tx = deposit(
+                    alice,
+                    smplToken,
+                    ethers.utils.parseUnits(10e12.toString(), 18)
+                );
+                await expect(tx).to.be.revertedWith('CouldNotTransferFunds()');
+            });
+            
             it('Should emit AssetDeposited event', async() => {
                 const [ tx, result ] = await txExec(
                     deposit(
@@ -385,7 +371,7 @@ xdescribe('Deposits component', () => {
             });
             
             it('Should return proper liquidity', async() => {
-                const liquidity = await mainContract.getAccountLiquidity(alice.address);
+                const liquidity = await mainContract.getAccountCollateralization(alice.address);
                 expect(liquidity).to.be.equal(ethers.utils.parseUnits('625', 8));
             });
             
@@ -409,7 +395,7 @@ xdescribe('Deposits component', () => {
                 });
                 
                 it('Should return proper liquidity', async() => {
-                    const liquidity = await mainContract.getAccountLiquidity(alice.address);
+                    const liquidity = await mainContract.getAccountCollateralization(alice.address);
                     expect(liquidity).to.be.equal(ethers.utils.parseUnits('2500', 8));
                 });
             });
@@ -430,7 +416,7 @@ xdescribe('Deposits component', () => {
                 });
                 
                 it('Should return proper liquidity', async() => {
-                    const liquidity = await mainContract.getAccountLiquidity(alice.address);
+                    const liquidity = await mainContract.getAccountCollateralization(alice.address);
                     expect(liquidity).to.be.equal(ethers.utils.parseUnits('250', 8));
                 });
             });
@@ -444,7 +430,21 @@ xdescribe('Deposits component', () => {
                             smplToken.address,
                             ethers.utils.parseUnits('101', 18)
                         );
-                    await expect(tx).to.be.revertedWith('AmountExceedDeposit()');
+                    await expect(tx).to.be.revertedWith('AmountExceedWithdrawableLimit()');
+                });
+                
+                it('Should revert when transfer fails', async() => {
+                    await txExec(
+                        smplToken.setReturnFalseOnTransfer(true)
+                    );
+                    
+                    const tx = mainContract
+                        .connect(alice)
+                        .withdraw(
+                            smplToken.address,
+                            ethers.utils.parseUnits('10', 18)
+                        );
+                    await expect(tx).to.be.revertedWith('CouldNotTransferFunds()');
                 });
                 
                 it('Should emits AssetWithdrawn event', async() => {
@@ -480,6 +480,37 @@ xdescribe('Deposits component', () => {
                 });
                 
                 
+                describe('with limited liquidity', () => {
+                    beforeEach(async() => {
+                        await txExec(
+                            mainContract.__test__burnBalance(smplToken.address, ethers.utils.parseUnits('50', 18))
+                        );
+                    });
+                    
+                    it('Should not be able to withdraw more than liquid amount', async() => {
+                        const tx = mainContract
+                            .connect(alice)
+                            .withdraw(
+                                smplToken.address,
+                                ethers.utils.parseUnits('51', 18)
+                            );
+                        await expect(tx).to.be.revertedWith('AmountExceedLiquidDeposit()');
+                    });
+                    
+                    it('Should be able to withdraw less than liquid amount limit', async() => {
+                        await txExec(
+                            mainContract
+                                .connect(alice)
+                                .withdraw(
+                                    smplToken.address,
+                                    ethers.utils.parseUnits('50', 18)
+                                )
+                        );
+                    });
+                    
+                });
+                
+                
                 describe('successfully', () => {
                     beforeEach(async() => {
                         await txExec(
@@ -506,14 +537,14 @@ xdescribe('Deposits component', () => {
                         const value = await mainContract.getAccountTokenWithdrawable(smplToken.address, alice.address);
                         expect(value).to.be.equal(ethers.utils.parseUnits('50', 18));
                     });
-                
+                    
                     it('Should return proper deposit value', async() => {
                         const value = await mainContract.getAccountDepositValue(alice.address);
                         expect(value).to.be.equal(ethers.utils.parseUnits('1250', 8));
                     });
-            
+                    
                     it('Should return proper liquidity', async() => {
-                        const liquidity = await mainContract.getAccountLiquidity(alice.address);
+                        const liquidity = await mainContract.getAccountCollateralization(alice.address);
                         expect(liquidity).to.be.equal(ethers.utils.parseUnits('312.5', 8));
                     });
                 });
@@ -522,7 +553,110 @@ xdescribe('Deposits component', () => {
             
             // with collateral factor configured
             // with deposit
-            describe('with second (different decimals precission) asset deposit', () => {
+            describe('with second same asset deposit by Alice', () => {
+                beforeEach(async() => {
+                    await txExec(
+                        deposit(
+                            alice,
+                            smplToken,
+                            ethers.utils.parseUnits('50', 18)
+                        )
+                    );
+                });
+                
+                it('Should return proper total token deposits', async() => {
+                    const deposit = await mainContract.getTotalTokenDeposit(smplToken.address);
+                    expect(deposit).to.be.equal(ethers.utils.parseUnits('150', 18));
+                });
+                
+                
+                it('Should return proper deposit', async() => {
+                    const deposit = await mainContract.getAccountTokenDeposit(smplToken.address, alice.address);
+                    expect(deposit).to.be.equal(ethers.utils.parseUnits('150', 18));
+                });
+                
+                it('Should return proper withdrawable amount', async() => {
+                    const value = await mainContract.getAccountTokenWithdrawable(smplToken.address, alice.address);
+                    expect(value).to.be.equal(ethers.utils.parseUnits('150', 18));
+                });
+                
+                it('Should return proper deposit value', async() => {
+                    const value = await mainContract.getAccountDepositValue(alice.address);
+                    expect(value).to.be.equal(ethers.utils.parseUnits('3750', 8));
+                });
+                
+                it('Should return proper liquidity', async() => {
+                    const liquidity = await mainContract.getAccountCollateralization(alice.address);
+                    expect(liquidity).to.be.equal(ethers.utils.parseUnits('937.5', 8));
+                });
+            });
+            
+            
+            // with collateral factor configured
+            // with deposit
+            describe('with second same asset deposit by Bob', () => {
+                beforeEach(async() => {
+                    await txExec(
+                        deposit(
+                            bob,
+                            smplToken,
+                            ethers.utils.parseUnits('50', 18)
+                        )
+                    );
+                });
+                
+                it('Should return proper total token deposits', async() => {
+                    const deposit = await mainContract.getTotalTokenDeposit(smplToken.address);
+                    expect(deposit).to.be.equal(ethers.utils.parseUnits('150', 18));
+                });
+                
+                
+                it('Should return proper Alice deposit', async() => {
+                    const deposit = await mainContract.getAccountTokenDeposit(smplToken.address, alice.address);
+                    expect(deposit).to.be.equal(ethers.utils.parseUnits('100', 18));
+                });
+                
+                it('Should return proper Alice withdrawable amount', async() => {
+                    const value = await mainContract.getAccountTokenWithdrawable(smplToken.address, alice.address);
+                    expect(value).to.be.equal(ethers.utils.parseUnits('100', 18));
+                });
+                
+                it('Should return proper Alice deposit value', async() => {
+                    const value = await mainContract.getAccountDepositValue(alice.address);
+                    expect(value).to.be.equal(ethers.utils.parseUnits('2500', 8));
+                });
+                
+                it('Should return proper Alice liquidity', async() => {
+                    const liquidity = await mainContract.getAccountCollateralization(alice.address);
+                    expect(liquidity).to.be.equal(ethers.utils.parseUnits('625', 8));
+                });
+                
+                
+                it('Should return proper Bob token deposit', async() => {
+                    const deposit = await mainContract.getAccountTokenDeposit(smplToken.address, bob.address);
+                    expect(deposit).to.be.equal(ethers.utils.parseUnits('50', 18));
+                });
+                
+                it('Should return proper Bob withdrawable amount', async() => {
+                    const amount = await mainContract.getAccountTokenWithdrawable(smplToken.address, bob.address);
+                    expect(amount).to.be.equal(ethers.utils.parseUnits('50', 18));
+                });
+                
+                it('Should return proper Bob deposit value', async() => {
+                    const value = await mainContract.getAccountDepositValue(bob.address);
+                    expect(value).to.be.equal(ethers.utils.parseUnits('1250', 8));
+                });
+                
+                it('Should return proper Bob liquidity', async() => {
+                    const liquidity = await mainContract.getAccountCollateralization(bob.address);
+                    expect(liquidity).to.be.equal(ethers.utils.parseUnits('312.5', 8));
+                });
+            });
+            
+            
+            // with collateral factor configured
+            // with deposit
+            describe('with second (different decimals precission) asset deposit by Alice', () => {
                 beforeEach(async() => {
                     await txExec(
                         deposit(
@@ -542,15 +676,50 @@ xdescribe('Deposits component', () => {
                     const amount = await mainContract.getAccountTokenWithdrawable(smplToken2.address, alice.address);
                     expect(amount).to.be.equal(ethers.utils.parseUnits('10', 12));
                 });
-            
+                
                 it('Should return proper deposit value', async() => {
                     const value = await mainContract.getAccountDepositValue(alice.address);
                     expect(value).to.be.equal(ethers.utils.parseUnits('2600', 8));
                 });
                 
                 it('Should return proper liquidity', async() => {
-                    const liquidity = await mainContract.getAccountLiquidity(alice.address);
+                    const liquidity = await mainContract.getAccountCollateralization(alice.address);
                     expect(liquidity).to.be.equal(ethers.utils.parseUnits('675', 8));
+                });
+            });
+            
+            
+            // with collateral factor configured
+            // with deposit
+            describe('with second (different decimals precission) asset deposit by Bob', () => {
+                beforeEach(async() => {
+                    await txExec(
+                        deposit(
+                            bob,
+                            smplToken2,
+                            ethers.utils.parseUnits('10', 12)
+                        )
+                    );
+                });
+                
+                it('Should return proper token deposit', async() => {
+                    const deposit = await mainContract.getAccountTokenDeposit(smplToken2.address, bob.address);
+                    expect(deposit).to.be.equal(ethers.utils.parseUnits('10', 12));
+                });
+                
+                it('Should return proper withdrawable amount', async() => {
+                    const amount = await mainContract.getAccountTokenWithdrawable(smplToken2.address, bob.address);
+                    expect(amount).to.be.equal(ethers.utils.parseUnits('10', 12));
+                });
+                
+                it('Should return proper deposit value', async() => {
+                    const value = await mainContract.getAccountDepositValue(bob.address);
+                    expect(value).to.be.equal(ethers.utils.parseUnits('100', 8));
+                });
+                
+                it('Should return proper liquidity', async() => {
+                    const liquidity = await mainContract.getAccountCollateralization(bob.address);
+                    expect(liquidity).to.be.equal(ethers.utils.parseUnits('50', 8));
                 });
             });
         });

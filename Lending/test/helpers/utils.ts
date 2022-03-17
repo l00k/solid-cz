@@ -1,5 +1,5 @@
 import { TypedEvent } from '@/common';
-import { IERC20 } from '@/IERC20';
+import { TokenMock } from '@/TokenMock';
 import { smock } from '@defi-wonderland/smock';
 import { Block } from '@ethersproject/abstract-provider';
 import { ContractReceipt } from '@ethersproject/contracts/src.ts/index';
@@ -158,13 +158,13 @@ export async function createTokenMock (
     decimals : number = 18,
     initialSupply : BigNumber = null,
     initialTransfers : boolean = true
-) : Promise<IERC20>
+) : Promise<TokenMock>
 {
     if (!initialSupply) {
         initialSupply = ethers.utils.parseUnits(1e12.toString(), decimals)
     }
 
-    const tokenContract : IERC20 = await deployContract(
+    const tokenContract : TokenMock = await deployContract(
         'TokenMock',
         name,
         symbol,
