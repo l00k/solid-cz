@@ -362,6 +362,17 @@ describe('Borrowing component', () => {
                         .borrow(smplToken.address, ethers.utils.parseUnits('251', 18));
                     await expect(tx).to.be.revertedWith('AmountExceedBorrowableLimit()');
                 });
+            
+                it('Should revert when transfer fails', async() => {
+                    await txExec(
+                        smplToken.setReturnValueOnTransfer(false)
+                    );
+                    
+                    const tx = mainContract
+                        .connect(alice)
+                        .borrow(smplToken.address, ethers.utils.parseUnits('100', 18));
+                    await expect(tx).to.be.revertedWith('CouldNotTransferFunds()');
+                });
                 
                 it('Should emit event', async() => {
                     const [ tx, result ] = await txExec(
@@ -427,7 +438,7 @@ describe('Borrowing component', () => {
                     expect(debit).to.be.equal(ethers.utils.parseUnits('100', 12));
                 });
                 
-                it('Should return proper total debit', async() => {
+                it('Should return proper debit value', async() => {
                     const debit = await mainContract.getAccountDebitValue(alice.address);
                     expect(debit).to.be.equal(ethers.utils.parseUnits('1000', 8));
                 });
@@ -527,6 +538,19 @@ describe('Borrowing component', () => {
                         );
                         await expect(tx).to.be.revertedWith('ERC20: transfer amount exceeds balance');
                     });
+            
+                    it('Should revert when transfer fails', async() => {
+                        await txExec(
+                            smplToken2.setReturnValueOnTransfer(false)
+                        );
+                        
+                        const tx = repay(
+                            alice,
+                            smplToken2,
+                            ethers.utils.parseUnits('50', 12)
+                        );
+                        await expect(tx).to.be.revertedWith('CouldNotTransferFunds()');
+                    });
                     
                     it('Should emit event', async() => {
                         const [ tx, result ] = await txExec(
@@ -590,7 +614,7 @@ describe('Borrowing component', () => {
                         expect(debit).to.be.equal(ethers.utils.parseUnits('50', 12));
                     });
                     
-                    it('Should return proper total debit', async() => {
+                    it('Should return proper debit value', async() => {
                         const debit = await mainContract.getAccountDebitValue(alice.address);
                         expect(debit).to.be.equal(ethers.utils.parseUnits('500', 8));
                     });
@@ -683,7 +707,7 @@ describe('Borrowing component', () => {
                                 expect(debit).to.be.equal(0);
                             });
                             
-                            it('Should return proper total debit', async() => {
+                            it('Should return proper debit value', async() => {
                                 const debit = await mainContract.getAccountDebitValue(alice.address);
                                 expect(debit).to.be.equal(0);
                             });
@@ -709,6 +733,66 @@ describe('Borrowing component', () => {
                         });
                     });
                 });
+                
+                
+            
+            
+                // with borrowable fraction configured
+                // with liquidity provided by Bob and Carol
+                // with liquidity provided by Alice
+                // with Alice borrowed funds
+                describe('borrowing once again', () => {
+                    beforeEach(async() => {
+                        await txExec(
+                            mainContract
+                                .connect(alice)
+                                .borrow(
+                                    smplToken2.address,
+                                    ethers.utils.parseUnits('50', 12)
+                                )
+                        );
+                    });
+                    
+                    it('Should reduce account liqudity', async() => {
+                        const amount = await mainContract.getAccountCollateralization(alice.address);
+                        expect(amount).to.be.equal(ethers.utils.parseUnits('4750', 8));
+                    });
+                    
+                    it('Should return proper borrowed amount', async() => {
+                        const amount = await mainContract.getTotalTokenDebit(smplToken2.address);
+                        expect(amount).to.be.equal(ethers.utils.parseUnits('150', 12));
+                    });
+                    
+                    it('Should return proper token debit', async() => {
+                        const debit = await mainContract.getAccountTokenDebit(smplToken2.address, alice.address);
+                        expect(debit).to.be.equal(ethers.utils.parseUnits('150', 12));
+                    });
+                    
+                    it('Should return proper debit value', async() => {
+                        const debit = await mainContract.getAccountDebitValue(alice.address);
+                        expect(debit).to.be.equal(ethers.utils.parseUnits('1500', 8));
+                    });
+                    
+                    it('Should return proper token available to borrow by account', async() => {
+                        const amount = await mainContract.getAccountTokenBorrowable(smplToken.address, alice.address);
+                        // (1000 * 25 * 0.25 - 150 * 10) / 25 = 190
+                        expect(amount).to.be.equal(ethers.utils.parseUnits('190', 18));
+                    });
+                    
+                    it('Should return limited token available to borrow by account', async() => {
+                        const amount2 = await mainContract.getAccountTokenBorrowable(smplToken2.address, alice.address);
+                        // (1000 * 25 * 0.25 - 150 * 10) / 10 = 475
+                        // 475 > 250 (total available)
+                        expect(amount2).to.be.equal(ethers.utils.parseUnits('250', 12));
+                    });
+                    
+                    it('Should reduce withdrawable amount', async() => {
+                        const amount = await mainContract.getAccountTokenWithdrawable(smplToken.address, alice.address);
+                        // (1000 * 25 * 0.25 - 150 * 10) / 0.25 / 25
+                        expect(amount).to.be.equal(ethers.utils.parseUnits('760', 18));
+                    });
+                });
+                
             });
         });
     });

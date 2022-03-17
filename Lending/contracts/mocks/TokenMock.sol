@@ -11,7 +11,7 @@ contract TokenMock is
 {
 
     uint8 private _decimals;
-    bool private _returnFalseOnTransfer;
+    bool private _returnValueOnTransfer = true;
 
     constructor(
         string memory name_,
@@ -30,11 +30,11 @@ contract TokenMock is
         return _decimals;
     }
 
-    function setReturnFalseOnTransfer(
-        bool returnFalseOnTransfer
+    function setReturnValueOnTransfer(
+        bool returnValueOnTransfer
     ) public
     {
-        _returnFalseOnTransfer = returnFalseOnTransfer;
+        _returnValueOnTransfer = returnValueOnTransfer;
     }
 
     function transfer(
@@ -42,11 +42,8 @@ contract TokenMock is
         uint256 amount
     ) public virtual override(IERC20, ERC20) returns (bool)
     {
-        if (_returnFalseOnTransfer) {
-            return false;
-        }
-
-        return ERC20.transfer(to, amount);
+        ERC20.transfer(to, amount);
+        return _returnValueOnTransfer;
     }
 
     function transferFrom(
@@ -55,11 +52,8 @@ contract TokenMock is
         uint256 amount
     ) public virtual override(IERC20, ERC20) returns (bool)
     {
-        if (_returnFalseOnTransfer) {
-            return false;
-        }
-
-        return ERC20.transferFrom(from, to, amount);
+        ERC20.transferFrom(from, to, amount);
+        return _returnValueOnTransfer;
     }
 
 }

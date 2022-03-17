@@ -151,8 +151,8 @@ contract Borrowing is
         onlySupportedAsset(token)
         returns (uint256)
     {
-        uint256 deposit = getAccountTokenDeposit(token, account);
-        if (deposit == 0) {
+        uint256 baseWithdrawable = super.getAccountTokenWithdrawable(token, account);
+        if (baseWithdrawable == 0) {
             return 0;
         }
 
@@ -176,13 +176,13 @@ contract Borrowing is
                 / tokenPrice;
 
             // limit to deposit amount
-            return maxWithdrawable < deposit
+            return maxWithdrawable < baseWithdrawable
                 ? maxWithdrawable
-                : deposit;
+                : baseWithdrawable;
         }
         else {
             // in case token asset is not collateral (factor = 0) entire deposit is withdrawable
-            return deposit;
+            return baseWithdrawable;
         }
     }
 
