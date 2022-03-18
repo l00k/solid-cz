@@ -91,28 +91,28 @@ contract Deposits is
         IERC20Metadata token,
         address account
     ) internal view returns (
-        uint256 deposit,
+        uint256 depositAmount,
         uint256 depositValue,
         uint256 tokenPrice
     )
     {
         tokenPrice = getTokenPrice(token);
 
-        deposit = getAccountTokenDeposit(token, account);
-        if (deposit == 0) {
+        depositAmount = getAccountTokenDeposit(token, account);
+        if (depositAmount == 0) {
             return (0, 0, tokenPrice);
         }
 
         uint8 tokenDecimals = token.decimals();
 
         // depositValue(8 digits precise) =
-        //      accountDeposit(<tokenDecimals> digits precise)
+        //      depositAmount(<tokenDecimals> digits precise)
         //      * price(8 digits precise)
-        depositValue = deposit
-            * price
+        depositValue = depositAmount
+            * tokenPrice
             / (10 ** tokenDecimals);
 
-        return (deposit, depositValue, tokenPrice);
+        return (depositAmount, depositValue, tokenPrice);
     }
 
     /**
@@ -129,7 +129,7 @@ contract Deposits is
         IERC20Metadata[] memory tokens = getSupportedTokens();
 
         for (uint256 tid = 0; tid < tokens.length; ++tid) {
-            (, uint256 tokenDepositValue) = _getAccountTokenDepositEx(tokens[tid], account);
+            (, uint256 tokenDepositValue,) = _getAccountTokenDepositEx(tokens[tid], account);
             value += tokenDepositValue;
         }
 
@@ -151,7 +151,7 @@ contract Deposits is
 
         for (uint256 tid = 0; tid < tokens.length; ++tid) {
             uint32 collateralFactor = getTokenCollateralFactor(tokens[tid]);
-            (, uint256 tokenDepositValue) = _getAccountTokenDepositEx(tokens[tid], account);
+            (, uint256 tokenDepositValue,) = _getAccountTokenDepositEx(tokens[tid], account);
 
             // liquidity(8 digits precise) =
             //      depositValue(8 digits precise)

@@ -32,7 +32,7 @@ export function findEvent<T extends Event> (result : ContractReceipt, eventName 
 export function assertEvent<T extends TypedEvent> (
     result : ContractReceipt,
     eventName : string,
-    eventArgs : Partial<T['args']>,
+    eventArgs : Partial<T['args']> = {},
     offset : number = 0
 )
 {

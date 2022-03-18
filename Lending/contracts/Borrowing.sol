@@ -54,15 +54,15 @@ contract Borrowing is
         IERC20Metadata token,
         address account
     ) internal view returns (
-        uint256 debit,
+        uint256 debitAmount,
         uint256 debitValue,
         uint256 tokenPrice
     )
     {
         tokenPrice = getTokenPrice(token);
 
-        debit = getAccountTokenDebit(token, account);
-        if (debit == 0) {
+        debitAmount = getAccountTokenDebit(token, account);
+        if (debitAmount == 0) {
             return (0, 0, tokenPrice);
         }
 
@@ -71,11 +71,11 @@ contract Borrowing is
         // tokenDebitValue(8 digits precise) =
         //      debit (<tokenDecimals> digits precise)
         //      * price(8 digits precise)
-        debitValue = debit
+        debitValue = debitAmount
             * tokenPrice
             / (10 ** tokenDecimals);
 
-        return (debit, debitValue, tokenPrice);
+        return (debitAmount, debitValue, tokenPrice);
     }
 
     /**
@@ -132,16 +132,16 @@ contract Borrowing is
         address account
     ) public view virtual returns (uint256)
     {
-        uint256 totalDebit = 0;
+        uint256 totalDebitValue = 0;
 
         IERC20Metadata[] memory tokens = getSupportedTokens();
-
         for (uint i = 0; i<tokens.length; ++i) {
             IERC20Metadata token = tokens[i];
-            totalDebit += _getAccountTokenDebitEx(token, account);
+            (, uint256 tokenDebitValue,) = _getAccountTokenDebitEx(token, account);
+            totalDebitValue += tokenDebitValue;
         }
 
-        return totalDebit;
+        return totalDebitValue;
     }
 
     /**
@@ -310,7 +310,7 @@ contract Borrowing is
         // reduce debit share
         _decreaseDebitShares(
             token,
-            msg.sender,
+            account,
             amount
         );
         _decreaseTotalDebit(token, amount);

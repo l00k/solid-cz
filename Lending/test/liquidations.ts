@@ -1,13 +1,13 @@
-import { TokenMock } from '@/TokenMock';
 import {
     LendingProtocol,
-    LiquidatedEvent,
-    LiquidatedTokenEvent,
+    LiquidatedDepositEvent,
     LiquidationIncentiveChangedEvent,
     LoanFullyRepaidEvent,
     LoanPartiallyRepaidEvent
 } from '@/LendingProtocol';
 import { PriceFeedMock } from '@/PriceFeedMock';
+import { SwapProviderMock } from '@/SwapProviderMock';
+import { TokenMock } from '@/TokenMock';
 import { ContractReceipt } from '@ethersproject/contracts/src.ts/index';
 import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
 import { expect } from 'chai';
@@ -19,7 +19,7 @@ import { assertEvent, assertIsAvailableOnlyForOwner, createTokenMock, deployCont
 const WBTC_ADDRESS = '0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599';
 
 
-xdescribe('Liquidations component', () => {
+describe('Liquidations component', () => {
     let owner : SignerWithAddress;
     let alice : SignerWithAddress;
     let bob : SignerWithAddress;
@@ -28,14 +28,16 @@ xdescribe('Liquidations component', () => {
     let mainContract : LendingProtocol;
     
     let smplToken0 : TokenMock;
-    let smplToken : TokenMock;
+    let smplToken1 : TokenMock;
     let smplToken2 : TokenMock;
     let smplToken3 : TokenMock;
     
     let priceFeedContract0 : PriceFeedMock;
-    let priceFeedContract : PriceFeedMock;
+    let priceFeedContract1 : PriceFeedMock;
     let priceFeedContract2 : PriceFeedMock;
     let priceFeedContract3 : PriceFeedMock;
+    
+    let swapProviderMock : SwapProviderMock;
     
     
     async function deposit (
@@ -120,15 +122,11 @@ xdescribe('Liquidations component', () => {
         );
         
         await txExec(
-            mainContract.connect(owner).addSupportedAsset(token.address, priceFeedContract.address, true)
+            mainContract.connect(owner).addSupportedAsset(token.address, priceFeedContract.address)
         );
         
         await txExec(
             mainContract.connect(owner).setTokenCollateralFactor(token.address, collateralFactor)
-        );
-        
-        await txExec(
-            mainContract.connect(owner).setTokenBorrowableFraction(token.address, borrowableFraction)
         );
         
         return [
@@ -139,7 +137,7 @@ xdescribe('Liquidations component', () => {
     
     function checkLiquidatingDoesNothing ()
     {
-        it('Liquidating should do nothing', async() => {
+        it('liquidating should do nothing', async() => {
             {
                 const [ tx, result ] = await txExec(
                     mainContract
@@ -154,7 +152,7 @@ xdescribe('Liquidations component', () => {
                     .connect(owner)
                     .liquidate(alice.address);
                 await expect(tx).to.changeTokenBalances(
-                    smplToken,
+                    smplToken1,
                     [ alice, mainContract ],
                     [ 0, 0 ]
                 );
@@ -199,27 +197,27 @@ xdescribe('Liquidations component', () => {
             ethers.utils.parseUnits('10', 8)
         );
         
-        [ smplToken, priceFeedContract ] = await setupToken(
-            'Sample',
-            'SMPL',
+        [ smplToken1, priceFeedContract1 ] = await setupToken(
+            'Sample1',
+            'SMPL1',
             ethers.utils.parseUnits('25', 8)
         );
         
         [ smplToken2, priceFeedContract2 ] = await setupToken(
-            'Sample1',
-            'SMPL1',
-            ethers.utils.parseUnits('10', 8)
-        );
-        
-        [ smplToken3, priceFeedContract3 ] = await setupToken(
             'Sample2',
             'SMPL2',
             ethers.utils.parseUnits('10', 8)
         );
         
+        [ smplToken3, priceFeedContract3 ] = await setupToken(
+            'Sample3',
+            'SMPL3',
+            ethers.utils.parseUnits('10', 8)
+        );
+        
         // provide liquidity
         await txExec(
-            deposit(bob, smplToken, ethers.utils.parseUnits('1000', 18))
+            deposit(bob, smplToken1, ethers.utils.parseUnits('1000', 18))
         );
         
         await txExec(
@@ -228,6 +226,25 @@ xdescribe('Liquidations component', () => {
         
         await txExec(
             deposit(carol, smplToken3, ethers.utils.parseUnits('1000', 18))
+        );
+        
+        // swap provider
+        swapProviderMock = await deployContract('SwapProviderMock');
+        await txExec(
+            mainContract.setSwapProvider(swapProviderMock.address)
+        );
+        
+        await txExec(
+            smplToken0.connect(owner).transfer(swapProviderMock.address, ethers.utils.parseUnits('100000', 18))
+        );
+        await txExec(
+            smplToken1.connect(owner).transfer(swapProviderMock.address, ethers.utils.parseUnits('100000', 18))
+        );
+        await txExec(
+            smplToken2.connect(owner).transfer(swapProviderMock.address, ethers.utils.parseUnits('100000', 18))
+        );
+        await txExec(
+            smplToken3.connect(owner).transfer(swapProviderMock.address, ethers.utils.parseUnits('100000', 18))
         );
     });
     
@@ -238,8 +255,8 @@ xdescribe('Liquidations component', () => {
             expect(amount).to.be.equal(0);
         });
         
-        it('Should return proper liquidation value', async() => {
-            const amount = await mainContract.getAccountLiquidationValue(alice.address);
+        it('Should return proper collateralization value', async() => {
+            const amount = await mainContract.getAccountCollateralization(alice.address);
             expect(amount).to.be.equal(0);
         });
         
@@ -296,12 +313,12 @@ xdescribe('Liquidations component', () => {
         
         
         // with liquidation incentive configured
-        describe('with liquidity provided by Alice', () => {
+        describe('with AAA deposit by Alice', () => {
             beforeEach(async() => {
                 await txExec(
                     deposit(
                         alice,
-                        smplToken,
+                        smplToken1,
                         ethers.utils.parseUnits('40', 18)
                     )
                 );
@@ -324,7 +341,7 @@ xdescribe('Liquidations component', () => {
             });
             
             
-            it('Should return proper account liquidity', async() => {
+            it('Should return proper collateralization value', async() => {
                 const amount = await mainContract.getAccountCollateralization(alice.address);
                 // (40 * 25 * 0.5) + (50 * 10 * 0.5) + (50 * 10 * 0.5)
                 expect(amount).to.be.equal(ethers.utils.parseUnits('1000', 8));
@@ -334,8 +351,8 @@ xdescribe('Liquidations component', () => {
             
             
             // with liquidation incentive configured
-            // with liquidity provided by Alice
-            describe('with Alice borrowed one asset', () => {
+            // with AAA deposit by Alice
+            describe('with BBB borrowed by Alice', () => {
                 beforeEach(async() => {
                     await txExec(
                         mainContract
@@ -348,13 +365,7 @@ xdescribe('Liquidations component', () => {
                 });
                 
                 
-                it('Should return proper liquidation value', async() => {
-                    const amount = await mainContract.getAccountLiquidationValue(alice.address);
-                    // 30 * 10 * (1 + 0.1)
-                    expect(amount).to.be.equal(ethers.utils.parseUnits('330', 8));
-                });
-                
-                it('Should return proper account liquidity', async() => {
+                it('Should return proper collateralization value', async() => {
                     const amount = await mainContract.getAccountCollateralization(alice.address);
                     // 1000 - [30 * 10 * (1 + 0.1)]
                     expect(amount).to.be.equal(ethers.utils.parseUnits('670', 8));
@@ -364,12 +375,12 @@ xdescribe('Liquidations component', () => {
                 
                 
                 // with liquidation incentive configured
-                // with liquidity provided by Alice
-                // with Alice borrowed one asset
-                describe('with collateral asset price drop (liquidation of part of deposit)', () => {
+                // with AAA deposit by Alice
+                // with BBB borrowed by Alice
+                describe('with AAA price drop (liquidation of part of deposit)', () => {
                     beforeEach(async() => {
                         await pushNewPriceIntoFeed(
-                            priceFeedContract,
+                            priceFeedContract1,
                             ethers.utils.parseUnits('1', 8)
                         );
                         
@@ -379,7 +390,7 @@ xdescribe('Liquidations component', () => {
                         );
                     });
                     
-                    it('Should return proper account liquidity', async() => {
+                    it('Should return proper collateralization value', async() => {
                         const amount = await mainContract.getAccountCollateralization(alice.address);
                         // [(40 * 1 * 0.5) + (50 * 10 * 0.5) + (50 * 1 * 0.5)] - (30 * 10 * 1.1)
                         expect(amount).to.be.equal(ethers.utils.parseUnits('-35', 8));
@@ -398,23 +409,16 @@ xdescribe('Liquidations component', () => {
                             );
                         });
                         
-                        it('Should emit Liquidated event', async() => {
-                            await assertEvent<LiquidatedEvent>(result, 'Liquidated', {
-                                who: alice.address,
-                                value: ethers.utils.parseUnits('330', 8),
-                            });
-                        });
-                        
-                        it('Should emit LiquidatedToken events', async() => {
+                        it('Should emit LiquidatedDeposit events', async() => {
                             // 330 / 1 = 330 (max 40)
-                            await assertEvent<LiquidatedTokenEvent>(result, 'LiquidatedToken', {
+                            await assertEvent<LiquidatedDepositEvent>(result, 'LiquidatedDeposit', {
                                 who: alice.address,
-                                token: smplToken.address,
+                                token: smplToken1.address,
                                 amount: ethers.utils.parseUnits('40', 18),
                             });
                             
                             // [330 - (40 * 1)] / 10 = 29 (max 50)
-                            await assertEvent<LiquidatedTokenEvent>(result, 'LiquidatedToken', {
+                            await assertEvent<LiquidatedDepositEvent>(result, 'LiquidatedDeposit', {
                                 who: alice.address,
                                 token: smplToken2.address,
                                 amount: ethers.utils.parseUnits('29', 18),
@@ -437,7 +441,7 @@ xdescribe('Liquidations component', () => {
                         });
                         
                         it('Should reduce deposit', async() => {
-                            const deposit = await mainContract.getAccountTokenDeposit(smplToken.address, alice.address);
+                            const deposit = await mainContract.getAccountTokenDeposit(smplToken1.address, alice.address);
                             expect(deposit).to.be.equal(0);
                             
                             const deposit2 = await mainContract.getAccountTokenDeposit(smplToken2.address, alice.address);
@@ -447,7 +451,7 @@ xdescribe('Liquidations component', () => {
                             expect(deposit3).to.be.equal(ethers.utils.parseUnits('50', 18));
                         });
                         
-                        it('Should return proper account liquidity', async() => {
+                        it('Should return proper collateralization value', async() => {
                             const amount = await mainContract.getAccountCollateralization(alice.address);
                             // [(21 * 10 * 0.5) + (50 * 1 * 0.5)]
                             expect(amount).to.be.equal(ethers.utils.parseUnits('130', 8));
@@ -457,9 +461,9 @@ xdescribe('Liquidations component', () => {
                 
                 
                 // with liquidation incentive configured
-                // with liquidity provided by Alice
-                // with Alice borrowed one asset
-                describe('with collateral asset price drop (liquidation of entire deposit)', () => {
+                // with AAA deposit by Alice
+                // with BBB borrowed by Alice
+                describe('with AAA price drop (liquidation of entire deposit)', () => {
                     beforeEach(async() => {
                         // first withdraw deposit
                         await txExec(
@@ -472,7 +476,7 @@ xdescribe('Liquidations component', () => {
                         );
                         
                         await pushNewPriceIntoFeed(
-                            priceFeedContract,
+                            priceFeedContract1,
                             ethers.utils.parseUnits('1', 8)
                         );
                         
@@ -482,7 +486,7 @@ xdescribe('Liquidations component', () => {
                         );
                     });
                     
-                    it('Should return proper account liquidity', async() => {
+                    it('Should return proper collateralization value', async() => {
                         const amount = await mainContract.getAccountCollateralization(alice.address);
                         // [(40 * 1 * 0.5) + (1 * 10 * 0.5) + (50 * 1 * 0.5)] - (30 * 10 * 1.1)
                         expect(amount).to.be.equal(ethers.utils.parseUnits('-280', 8));
@@ -501,23 +505,23 @@ xdescribe('Liquidations component', () => {
                             );
                         });
                         
-                        it('Should emit LiquidatedToken events', async() => {
+                        it('Should emit LiquidatedDeposit events', async() => {
                             // 330 / 1 = 330 (max 40)
-                            await assertEvent<LiquidatedTokenEvent>(result, 'LiquidatedToken', {
+                            await assertEvent<LiquidatedDepositEvent>(result, 'LiquidatedDeposit', {
                                 who: alice.address,
-                                token: smplToken.address,
+                                token: smplToken1.address,
                                 amount: ethers.utils.parseUnits('40', 18),
                             });
                             
                             // [330 - (40 * 1)] / 10 = 29 (max 1)
-                            await assertEvent<LiquidatedTokenEvent>(result, 'LiquidatedToken', {
+                            await assertEvent<LiquidatedDepositEvent>(result, 'LiquidatedDeposit', {
                                 who: alice.address,
                                 token: smplToken2.address,
                                 amount: ethers.utils.parseUnits('1', 18),
                             }, 1);
                             
                             // [330 - (40 * 1) - (1 * 10)] / 1 = 280 (max 50)
-                            await assertEvent<LiquidatedTokenEvent>(result, 'LiquidatedToken', {
+                            await assertEvent<LiquidatedDepositEvent>(result, 'LiquidatedDeposit', {
                                 who: alice.address,
                                 token: smplToken3.address,
                                 amount: ethers.utils.parseUnits('50', 18),
@@ -525,7 +529,7 @@ xdescribe('Liquidations component', () => {
                         });
                         
                         it('Should reduce deposit', async() => {
-                            const deposit = await mainContract.getAccountTokenDeposit(smplToken.address, alice.address);
+                            const deposit = await mainContract.getAccountTokenDeposit(smplToken1.address, alice.address);
                             expect(deposit).to.be.equal(0);
                             
                             const deposit2 = await mainContract.getAccountTokenDeposit(smplToken2.address, alice.address);
@@ -539,9 +543,9 @@ xdescribe('Liquidations component', () => {
                 
                 
                 // with liquidation incentive configured
-                // with liquidity provided by Alice
-                // with Alice borrowed one asset
-                describe('with borrowed asset price increase', () => {
+                // with AAA deposit by Alice
+                // with BBB borrowed by Alice
+                describe('with BBB price increase', () => {
                     beforeEach(async() => {
                         await pushNewPriceIntoFeed(
                             priceFeedContract2,
@@ -549,7 +553,7 @@ xdescribe('Liquidations component', () => {
                         );
                     });
                     
-                    it('Should return proper account liquidity', async() => {
+                    it('Should return proper collateralization value', async() => {
                         const amount = await mainContract.getAccountCollateralization(alice.address);
                         // [(40 * 25 * 0.5) + (50 * 100 * 0.5) + (50 * 10 * 0.5)] - (30 * 100 * 1.1)
                         expect(amount).to.be.equal(ethers.utils.parseUnits('-50', 8));
@@ -557,26 +561,23 @@ xdescribe('Liquidations component', () => {
                     
                     
                     describe('liquidating', () => {
-                        it('Should emit Liquidated event', async() => {
+                        it('Should emit LiquidatedDeposit event', async() => {
                             const [ tx, result ] = await txExec(
                                 mainContract
                                     .connect(owner)
                                     .liquidate(alice.address)
                             );
                             
-                            await assertEvent<LiquidatedEvent>(result, 'Liquidated', {
-                                who: alice.address,
-                                value: ethers.utils.parseUnits('3300', 8),
-                            });
+                            await assertEvent<LiquidatedDepositEvent>(result, 'LiquidatedDeposit');
                         });
                     });
                 });
                 
                 
                 // with liquidation incentive configured
-                // with liquidity provided by Alice
-                // with Alice borrowed one asset
-                describe('with Alice borrowed second asset', () => {
+                // with AAA deposit by Alice
+                // with BBB borrowed by Alice
+                describe('with CCC borrowed by Alice', () => {
                     beforeEach(async() => {
                         await txExec(
                             mainContract
@@ -588,13 +589,7 @@ xdescribe('Liquidations component', () => {
                         );
                     });
                     
-                    it('Should return proper liquidation value', async() => {
-                        const amount = await mainContract.getAccountLiquidationValue(alice.address);
-                        // [ 30 * 10 + 50 * 10 ] * (1 + 0.1)
-                        expect(amount).to.be.equal(ethers.utils.parseUnits('880', 8));
-                    });
-                    
-                    it('Should return proper account liquidity', async() => {
+                    it('Should return proper collateralization value', async() => {
                         const amount = await mainContract.getAccountCollateralization(alice.address);
                         // 1000 - [ 30 * 10 + 50 * 10 ] * (1 + 0.1)
                         expect(amount).to.be.equal(ethers.utils.parseUnits('120', 8));
@@ -604,18 +599,18 @@ xdescribe('Liquidations component', () => {
                     
                     
                     // with liquidation incentive configured
-                    // with liquidity provided by Alice
-                    // with Alice borrowed one asset
-                    // with Alice borrowed second asset
-                    describe('with collateral asset price drop', () => {
+                    // with AAA deposit by Alice
+                    // with BBB borrowed by Alice
+                    // with CCC borrowed by Alice
+                    describe('with AAA price drop', () => {
                         beforeEach(async() => {
                             await pushNewPriceIntoFeed(
-                                priceFeedContract,
+                                priceFeedContract1,
                                 ethers.utils.parseUnits('10', 8)
                             );
                         });
                         
-                        it('Should return proper account liquidity', async() => {
+                        it('Should return proper collateralization value', async() => {
                             const amount = await mainContract.getAccountCollateralization(alice.address);
                             // [(40 * 10 * 0.5) + (50 * 10 * 0.5) + (50 * 10 * 0.5)] - [ 30 * 10 + 50 * 10 ] * (1 + 0.1)
                             expect(amount).to.be.equal(ethers.utils.parseUnits('-180', 8));
@@ -634,23 +629,16 @@ xdescribe('Liquidations component', () => {
                                 );
                             });
                             
-                            it('Should emit Liquidated event', async() => {
-                                await assertEvent<LiquidatedEvent>(result, 'Liquidated', {
-                                    who: alice.address,
-                                    value: ethers.utils.parseUnits('880', 8),
-                                });
-                            });
-                            
-                            it('Should emit LiquidatedToken events', async() => {
+                            it('Should emit LiquidatedDeposit events', async() => {
                                 // 880 / 10 = 88 (max 40)
-                                await assertEvent<LiquidatedTokenEvent>(result, 'LiquidatedToken', {
+                                await assertEvent<LiquidatedDepositEvent>(result, 'LiquidatedDeposit', {
                                     who: alice.address,
-                                    token: smplToken.address,
+                                    token: smplToken1.address,
                                     amount: ethers.utils.parseUnits('40', 18),
                                 });
                                 
                                 // [880 - (40 * 10)] / 10 = 48 (max 50)
-                                await assertEvent<LiquidatedTokenEvent>(result, 'LiquidatedToken', {
+                                await assertEvent<LiquidatedDepositEvent>(result, 'LiquidatedDeposit', {
                                     who: alice.address,
                                     token: smplToken2.address,
                                     amount: ethers.utils.parseUnits('48', 18),
@@ -673,7 +661,7 @@ xdescribe('Liquidations component', () => {
                             });
                             
                             it('Should reduce deposit', async() => {
-                                const deposit = await mainContract.getAccountTokenDeposit(smplToken.address, alice.address);
+                                const deposit = await mainContract.getAccountTokenDeposit(smplToken1.address, alice.address);
                                 expect(deposit).to.be.equal(0);
                                 
                                 const deposit2 = await mainContract.getAccountTokenDeposit(smplToken2.address, alice.address);
@@ -683,7 +671,7 @@ xdescribe('Liquidations component', () => {
                                 expect(deposit3).to.be.equal(ethers.utils.parseUnits('50', 18));
                             });
                             
-                            it('Should return proper account liquidity', async() => {
+                            it('Should return proper collateralization value', async() => {
                                 const amount = await mainContract.getAccountCollateralization(alice.address);
                                 // (2 * 10 * 0.5) + (50 * 10 * 0.5)
                                 expect(amount).to.be.equal(ethers.utils.parseUnits('260', 8));

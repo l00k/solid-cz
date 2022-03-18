@@ -11,6 +11,6 @@ interface SwapProviderInterface
         IERC20 tokenFrom,
         IERC20 tokenTo,
         uint256 amount
-    ) public returns (uint256);
+    ) external returns (uint256);
 
 }

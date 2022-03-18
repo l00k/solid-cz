@@ -90,6 +90,15 @@ contract Liquidations is
         onlyOwner
     {
         _swapProvider = swapProvider;
+
+        // set unlimited allowance of tokens
+        IERC20Metadata[] memory tokens = getSupportedTokens();
+        for (uint i = 0; i<tokens.length; ++i) {
+            tokens[i].approve(
+                address(swapProvider),
+                type(uint256).max
+            );
+        }
     }
 
     function setLiquidationIncentive(
@@ -102,10 +111,7 @@ contract Liquidations is
         emit LiquidationIncentiveChanged(liquidationIncentive);
     }
 
-
-    function liquidate(
-        address account
-    ) public
+    function liquidate(address account) public
     {
         int256 collateralization = getAccountCollateralization(account);
         if (collateralization >= 0) {
@@ -113,6 +119,7 @@ contract Liquidations is
             return;
         }
 
+        IERC20Metadata[] memory tokens = getSupportedTokens();
         for (uint i = 0; i<tokens.length; ++i) {
             IERC20Metadata token = tokens[i];
 
@@ -141,13 +148,17 @@ contract Liquidations is
         address account
     ) internal returns (bool)
     {
-        uint256 loanDebitLeft = getAccountDebit(loanToken, account);
+        uint256 loanDebitLeft = getAccountTokenDebit(loanToken, account);
 
         // liquidate deposits
         IERC20Metadata[] memory tokens = getSupportedTokens();
-
         for (uint i = 0; i<tokens.length; ++i) {
             IERC20Metadata depositToken = tokens[i];
+
+            uint256 deposit = getAccountTokenDeposit(depositToken, account);
+            if (deposit == 0) {
+                continue;
+            }
 
             if (depositToken == loanToken) {
                 loanDebitLeft -= _liquidateLoanInSameToken(loanToken, account);
@@ -190,7 +201,7 @@ contract Liquidations is
 
         // liquidate account deposit
         _decreaseDepositShares(
-            depositToken,
+            token,
             account,
             depositLiquidationAmount
         );
@@ -232,16 +243,14 @@ contract Liquidations is
         IERC20Metadata loanToken,
         IERC20Metadata depositToken,
         address account
-    ) internal returns (bool)
+    ) internal returns (uint256)
     {
-        (uint256 debit, uint256 debitValue, uint256 loanTokenPrice) = _getAccountTokenDebitEx(token, account);
-        (uint256 deposit, uint256 depositValue, uint256 depositTokenPrice) = _getAccountTokenDepositEx(token, account);
+        (uint256 debit,, uint256 loanTokenPrice) = _getAccountTokenDebitEx(loanToken, account);
+        (uint256 deposit,, uint256 depositTokenPrice) = _getAccountTokenDepositEx(depositToken, account);
 
-        uint256 loanLiquidationAmount = _getAccountTokenLiquidationAmount(token, account);
+        uint256 loanLiquidationAmount = _getAccountTokenLiquidationAmount(loanToken, account);
 
         // calculate liquidation amount
-        uint8 loanTokenDecimals = loanToken.decimals();
-        uint8 depositTokenDecimals = depositTokeno.decimals();
 
         // depositLiquidationAmount(<depositTokenDecimals> digits precise) =
         //      loanLiquidationAmount(loanTokenDecimals> digits precise)
@@ -250,7 +259,7 @@ contract Liquidations is
         uint256 depositLiquidationAmount = loanLiquidationAmount
             * loanTokenPrice
             / depositTokenPrice
-            * 10 ** (depositTokenDecimals - loanTokenDecimals);
+            * 10 ** (depositToken.decimals() - loanToken.decimals());
 
         if (depositLiquidationAmount >= deposit) {
             // liquidate entire deposit
