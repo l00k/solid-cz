@@ -42,6 +42,25 @@ contract PlatformTresoury is
         emit PlatformCommissionChanged(token, platformCommission);
     }
 
+
+    function _depositIntoTresoury(
+        IERC20Metadata token,
+        uint256 amount
+    ) internal
+    {
+        _increaseDepositShares(
+            token,
+            address(this),
+            amount
+        );
+        _increaseTotalDeposit(
+            token,
+            amount
+        );
+
+        emit TransferToTresoury(token, amount);
+    }
+
     /**
      * @dev
      * Distribute funds with commission applied
@@ -60,18 +79,10 @@ contract PlatformTresoury is
             reducedAmount
         );
 
-        // deposit in tresoury
-        _increaseDepositShares(
-            token,
-            address(this),
-            commissionAmount
-        );
-        _increaseTotalDeposit(
+        _depositIntoTresoury(
             token,
             commissionAmount
         );
-
-        emit TransferToTresoury(token, commissionAmount);
     }
 
 

@@ -301,7 +301,7 @@ xdescribe('Deposits component', () => {
                 const tx = deposit(
                     alice,
                     smplToken,
-                    ethers.utils.parseUnits(10e12.toString(), 18)
+                    ethers.utils.parseUnits('1', 18)
                 );
                 await expect(tx).to.be.revertedWith('CouldNotTransferFunds()');
             });

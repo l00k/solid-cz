@@ -16,7 +16,7 @@ import { assertEvent, assertIsAvailableOnlyForOwner, createTokenMock, deployCont
 const WBTC_ADDRESS = '0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599';
 
 
-describe('Borrowing component', () => {
+xdescribe('Borrowing component', () => {
     let owner : SignerWithAddress;
     let alice : SignerWithAddress;
     let bob : SignerWithAddress;

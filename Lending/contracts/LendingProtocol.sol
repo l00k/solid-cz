@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import "./Borrowing.sol";
+import "./Liquidations.sol";
 
 
 contract LendingProtocol is
-    Borrowing
+    Liquidations
 {
 
     /**

@@ -47,6 +47,39 @@ contract Borrowing is
 
     /**
      * @dev
+     * Returns token debit in USD by account
+     * Precision: 8 digits
+     */
+    function _getAccountTokenDebitEx(
+        IERC20Metadata token,
+        address account
+    ) internal view returns (
+        uint256 debit,
+        uint256 debitValue,
+        uint256 tokenPrice
+    )
+    {
+        tokenPrice = getTokenPrice(token);
+
+        debit = getAccountTokenDebit(token, account);
+        if (debit == 0) {
+            return (0, 0, tokenPrice);
+        }
+
+        uint8 tokenDecimals = token.decimals();
+
+        // tokenDebitValue(8 digits precise) =
+        //      debit (<tokenDecimals> digits precise)
+        //      * price(8 digits precise)
+        debitValue = debit
+            * tokenPrice
+            / (10 ** tokenDecimals);
+
+        return (debit, debitValue, tokenPrice);
+    }
+
+    /**
+     * @dev
      * Returns total amount of non utilised tokens which are available to borrow
      */
     function getTotalTokenBorrowable(
@@ -105,19 +138,7 @@ contract Borrowing is
 
         for (uint i = 0; i<tokens.length; ++i) {
             IERC20Metadata token = tokens[i];
-
-            uint256 tokenDebit = getAccountTokenDebit(token, account);
-            if (tokenDebit == 0) {
-                continue;
-            }
-
-            uint8 tokenDecimals = token.decimals();
-            uint256 tokenPrice = getTokenPrice(token);
-
-            // liquidity(8 digits precise) =
-            //      debit (<tokenDecimals> digits precise)
-            //      * price(8 digits precise)
-            totalDebit += tokenDebit * tokenPrice / (10 ** tokenDecimals);
+            totalDebit += _getAccountTokenDebitEx(token, account);
         }
 
         return totalDebit;

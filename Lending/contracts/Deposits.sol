@@ -87,24 +87,32 @@ contract Deposits is
      * Returns value of account asset (only single given token)
      * Precision: 8 digits
      */
-    function _getAccountTokenDepositValue(
+    function _getAccountTokenDepositEx(
         IERC20Metadata token,
         address account
-    ) internal view returns (uint256)
+    ) internal view returns (
+        uint256 deposit,
+        uint256 depositValue,
+        uint256 tokenPrice
+    )
     {
-        uint256 accountDeposit = getAccountTokenDeposit(token, account);
-        if (accountDeposit == 0) {
-            return 0;
+        tokenPrice = getTokenPrice(token);
+
+        deposit = getAccountTokenDeposit(token, account);
+        if (deposit == 0) {
+            return (0, 0, tokenPrice);
         }
 
         uint8 tokenDecimals = token.decimals();
-        uint256 price = getTokenPrice(token);
 
         // depositValue(8 digits precise) =
         //      accountDeposit(<tokenDecimals> digits precise)
         //      * price(8 digits precise)
-        return accountDeposit * price
+        depositValue = deposit
+            * price
             / (10 ** tokenDecimals);
+
+        return (deposit, depositValue, tokenPrice);
     }
 
     /**
@@ -121,8 +129,8 @@ contract Deposits is
         IERC20Metadata[] memory tokens = getSupportedTokens();
 
         for (uint256 tid = 0; tid < tokens.length; ++tid) {
-            IERC20Metadata token = tokens[tid];
-            value += _getAccountTokenDepositValue(token, account);
+            (, uint256 tokenDepositValue) = _getAccountTokenDepositEx(tokens[tid], account);
+            value += tokenDepositValue;
         }
 
         return value;
@@ -142,14 +150,14 @@ contract Deposits is
         IERC20Metadata[] memory tokens = getSupportedTokens();
 
         for (uint256 tid = 0; tid < tokens.length; ++tid) {
-            IERC20Metadata token = tokens[tid];
-
-            uint32 collateralFactor = getTokenCollateralFactor(token);
+            uint32 collateralFactor = getTokenCollateralFactor(tokens[tid]);
+            (, uint256 tokenDepositValue) = _getAccountTokenDepositEx(tokens[tid], account);
 
             // liquidity(8 digits precise) =
             //      depositValue(8 digits precise)
             //      * collateralFactor(6 digits precise)
-            liquidity += _getAccountTokenDepositValue(token, account) * collateralFactor
+            liquidity += tokenDepositValue
+                 * collateralFactor
                 / 1e6;
         }
 
