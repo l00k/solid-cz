@@ -321,8 +321,8 @@ xdescribe('Borrowing component', () => {
             
             
             it('Should return proper account liquidity', async() => {
-                const amount = await mainContract.getAccountCollateralization(alice.address);
-                expect(amount).to.be.equal(ethers.utils.parseUnits('6250', 8));
+                const collateralization = await mainContract.getAccountCollateralization(alice.address);
+                expect(collateralization).to.be.equal(ethers.utils.parseUnits('6250', 8));
             });
             
             it('Should return proper token available to borrow', async() => {
@@ -424,8 +424,8 @@ xdescribe('Borrowing component', () => {
                 });
                 
                 it('Should reduce account liqudity', async() => {
-                    const amount = await mainContract.getAccountCollateralization(alice.address);
-                    expect(amount).to.be.equal(ethers.utils.parseUnits('5250', 8));
+                    const collateralization = await mainContract.getAccountCollateralization(alice.address);
+                    expect(collateralization).to.be.equal(ethers.utils.parseUnits('5250', 8));
                 });
                 
                 it('Should return proper borrowed amount', async() => {
@@ -502,8 +502,8 @@ xdescribe('Borrowing component', () => {
                     
                     it('Should have negative liqudity after collateral asset price drop', async() => {
                         // 1000 * 1 * 0.25 - 100 * 10
-                        const amount = await mainContract.getAccountCollateralization(alice.address);
-                        expect(amount).to.be.equal(ethers.utils.parseUnits('-750', 8));
+                        const collateralization = await mainContract.getAccountCollateralization(alice.address);
+                        expect(collateralization).to.be.equal(ethers.utils.parseUnits('-750', 8));
                     });
                 });
                 
@@ -600,8 +600,8 @@ xdescribe('Borrowing component', () => {
                     });
                     
                     it('Should increase account liqudity', async() => {
-                        const amount = await mainContract.getAccountCollateralization(alice.address);
-                        expect(amount).to.be.equal(ethers.utils.parseUnits('5750', 8));
+                        const collateralization = await mainContract.getAccountCollateralization(alice.address);
+                        expect(collateralization).to.be.equal(ethers.utils.parseUnits('5750', 8));
                     });
                     
                     it('Should return proper borrowed amount', async() => {
@@ -693,8 +693,8 @@ xdescribe('Borrowing component', () => {
                             });
                             
                             it('Should increase account liqudity', async() => {
-                                const amount = await mainContract.getAccountCollateralization(alice.address);
-                                expect(amount).to.be.equal(ethers.utils.parseUnits('6250', 8));
+                                const collateralization = await mainContract.getAccountCollateralization(alice.address);
+                                expect(collateralization).to.be.equal(ethers.utils.parseUnits('6250', 8));
                             });
                             
                             it('Should return proper borrowed amount', async() => {
@@ -754,8 +754,8 @@ xdescribe('Borrowing component', () => {
                     });
                     
                     it('Should reduce account liqudity', async() => {
-                        const amount = await mainContract.getAccountCollateralization(alice.address);
-                        expect(amount).to.be.equal(ethers.utils.parseUnits('4750', 8));
+                        const collateralization = await mainContract.getAccountCollateralization(alice.address);
+                        expect(collateralization).to.be.equal(ethers.utils.parseUnits('4750', 8));
                     });
                     
                     it('Should return proper borrowed amount', async() => {

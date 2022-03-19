@@ -14,15 +14,30 @@ chai.use(solidity);
 chai.use(smock.matchers);
 
 
-export function findEvent<T extends Event> (result : ContractReceipt, eventName : string, offset : number = 0) : T
+export function findEvent<T extends Event> (
+    result : ContractReceipt,
+    eventName : string,
+    offset : number = 0,
+    triggerErrorOnFailure : boolean = true
+) : T
 {
     if (!result.events?.length) {
-        expect.fail(`Event ${eventName} not found`);
+        if (triggerErrorOnFailure) {
+            expect.fail(`Event ${eventName} not found`);
+        }
+        else {
+            return null;
+        }
     }
     
     const events = result.events.filter(e => e.event == eventName);
     if (events.length - 1 < offset) {
-        expect.fail(`Event ${eventName}#${offset} not found`);
+        if (triggerErrorOnFailure) {
+            expect.fail(`Event ${eventName}#${offset} not found`);
+        }
+        else {
+            return null;
+        }
     }
     
     return <any>events[offset];
@@ -40,6 +55,20 @@ export function assertEvent<T extends TypedEvent> (
     
     for (const [ property, value ] of Object.entries(eventArgs)) {
         expect(event.args[property]).to.be.equal(value);
+    }
+}
+
+
+export function assertNoEvent<T extends TypedEvent> (
+    result : ContractReceipt,
+    eventName : string,
+    eventArgs : Partial<T['args']> = {},
+    offset : number = 0
+)
+{
+    const event = findEvent(result, eventName, offset, false);
+    if (event) {
+        expect.fail(`Expected to not found event ${eventName}#${offset}`)
     }
 }
 
@@ -107,11 +136,16 @@ export async function executeInSingleBlock (
     
     await network.provider.send('evm_setAutomine', [ true ]);
     
+    await mineBlock(1);
+    
     const txs = [];
     
     if (promises) {
         for (const promise of promises) {
-            txs.push(await promise);
+            const tx = await promise;
+            const result = await tx.wait(0);
+            expect(result.status).to.be.equal(1);
+            txs.push(tx);
         }
     }
     

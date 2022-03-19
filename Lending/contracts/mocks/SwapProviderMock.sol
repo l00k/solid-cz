@@ -10,7 +10,7 @@ contract SwapProviderMock is
 {
 
     // from => to => amount
-    mapping(IERC20 => mapping(IERC20 => uint256)) private _nextSwapAmount;
+    mapping(IERC20 => mapping(IERC20 => uint256)) private _swapPrice;
 
 
     function swap(
@@ -19,21 +19,22 @@ contract SwapProviderMock is
         uint256 amount
     ) public override returns (uint256)
     {
-        uint256 swapAmount = _nextSwapAmount[tokenFrom][tokenTo];
+        uint256 swapPrice = _swapPrice[tokenFrom][tokenTo];
+        uint256 swappedAmount = amount * swapPrice / 1e8;
 
         tokenFrom.transferFrom(msg.sender, address(this), amount);
-        tokenTo.transfer(msg.sender, swapAmount);
+        tokenTo.transfer(msg.sender, swappedAmount);
 
-        return swapAmount;
+        return swappedAmount;
     }
 
-    function setNextStawpAmount(
+    function setSwapPrice(
         IERC20 tokenFrom,
         IERC20 tokenTo,
-        uint256 amount
+        uint256 price
     ) public
     {
-        _nextSwapAmount[tokenFrom][tokenTo] = amount;
+        _swapPrice[tokenFrom][tokenTo] = price;
     }
 
 }

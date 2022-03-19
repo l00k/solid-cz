@@ -148,7 +148,6 @@ contract Liquidations is
         address account
     ) internal returns (bool)
     {
-        uint256 loanDebitLeft = getAccountTokenDebit(loanToken, account);
 
         // liquidate deposits
         IERC20Metadata[] memory tokens = getSupportedTokens();
@@ -160,20 +159,16 @@ contract Liquidations is
                 continue;
             }
 
-            if (depositToken == loanToken) {
-                loanDebitLeft -= _liquidateLoanInSameToken(loanToken, account);
-            }
-            else {
-                loanDebitLeft -= _liquidateLoanInDifferentToken(loanToken, depositToken, account);
-            }
+            bool fullyRepaid = depositToken == loanToken
+                ? _liquidateLoanInSameToken(loanToken, account)
+                : _liquidateLoanInDifferentToken(loanToken, depositToken, account);
 
-            if (loanDebitLeft == 0) {
-                // already liquidated entire loan
-                break;
+            if (fullyRepaid) {
+                return true;
             }
         }
 
-        return loanDebitLeft == 0;
+        return false;
     }
 
     /**
@@ -182,14 +177,13 @@ contract Liquidations is
      * Assumptions:
      *      - debit in given token exists
      *      - deposit in given token exists
-     * Returns amount of tokens from liquidated loan (excluding liquidation incentive)
+     * Returns true when fully repaid
      */
     function _liquidateLoanInSameToken(
         IERC20Metadata token,
         address account
-    ) internal returns (uint256)
+    ) internal returns (bool)
     {
-        uint256 debit = getAccountTokenDebit(token, account);
         uint256 deposit = getAccountTokenDeposit(token, account);
 
         uint256 loanLiquidationAmount = _getAccountTokenLiquidationAmount(token, account);
@@ -205,30 +199,31 @@ contract Liquidations is
             account,
             depositLiquidationAmount
         );
+        _decreaseTotalDeposit(
+            token,
+            depositLiquidationAmount
+        );
 
         emit LiquidatedDeposit(account, token, depositLiquidationAmount);
 
-        // transfer liquidation bonus (if any) to tresoury
-        if (depositLiquidationAmount > debit) {
-            uint256 liquidationBonus = depositLiquidationAmount - debit;
-            _depositIntoTresoury(
-                token,
-                liquidationBonus
-            );
-        }
+        // transfer liquidation bonus to tresoury
+        uint256 liquidationBonus = depositLiquidationAmount
+            * _liquidationIncentive
+            / (1e6 + _liquidationIncentive);
+        _depositIntoTresoury(
+            token,
+            liquidationBonus
+        );
 
         // repay
-        uint256 debitRepayment = depositLiquidationAmount > debit
-            ? debit
-            : depositLiquidationAmount;
-
-        _repay(
+        uint256 debitRepayment = depositLiquidationAmount - liquidationBonus;
+        bool fullyRepaid = _repay(
             token,
             account,
             debitRepayment
         );
 
-        return debitRepayment;
+        return fullyRepaid;
     }
 
     /**
@@ -237,15 +232,15 @@ contract Liquidations is
      * Assumptions:
      *      - debit in given loanToken exists
      *      - deposit in given depositToken exists
-     * Returns amount of tokens from liquidated loan (excluding liquidation incentive)
+     * Returns true when fully repaid
      */
     function _liquidateLoanInDifferentToken(
         IERC20Metadata loanToken,
         IERC20Metadata depositToken,
         address account
-    ) internal returns (uint256)
+    ) internal returns (bool)
     {
-        (uint256 debit,, uint256 loanTokenPrice) = _getAccountTokenDebitEx(loanToken, account);
+        (,, uint256 loanTokenPrice) = _getAccountTokenDebitEx(loanToken, account);
         (uint256 deposit,, uint256 depositTokenPrice) = _getAccountTokenDepositEx(depositToken, account);
 
         uint256 loanLiquidationAmount = _getAccountTokenLiquidationAmount(loanToken, account);
@@ -278,6 +273,10 @@ contract Liquidations is
             account,
             depositLiquidationAmount
         );
+        _decreaseTotalDeposit(
+            depositToken,
+            depositLiquidationAmount
+        );
 
         emit LiquidatedDeposit(account, depositToken, depositLiquidationAmount);
 
@@ -289,27 +288,26 @@ contract Liquidations is
             depositLiquidationAmount
         );
 
-        // transfer liquidation bonus (if any) to tresoury
-        if (loanLiquidatedAmount > debit) {
-            uint256 liquidationBonus = loanLiquidatedAmount - debit;
-            _depositIntoTresoury(
-                loanToken,
-                liquidationBonus
-            );
-        }
+        // transfer liquidation bonus to tresoury
+        uint256 liquidationBonus = loanLiquidatedAmount
+            * _liquidationIncentive
+            / (1e6 + _liquidationIncentive);
+        _depositIntoTresoury(
+            loanToken,
+            liquidationBonus
+        );
 
         // repay
-        uint256 debitRepayment = loanLiquidatedAmount > debit
-            ? debit
-            : loanLiquidatedAmount;
-
-        _repay(
+        // calculate debit repayment from liquidated amount
+        // liquidated amount includes liquidation incentive which has to be reduced
+        uint256 debitRepayment = loanLiquidatedAmount - liquidationBonus;
+        bool fullyRepaid = _repay(
             loanToken,
             account,
             debitRepayment
         );
 
-        return debitRepayment;
+        return fullyRepaid;
     }
 
 

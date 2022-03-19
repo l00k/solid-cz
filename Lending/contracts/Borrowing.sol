@@ -298,12 +298,13 @@ contract Borrowing is
     /**
      * @dev
      * Internal repay method available for methods of payments non involving transfers
+     * Returns true when loan was fully repaid
      */
     function _repay(
         IERC20Metadata token,
         address account,
         uint256 amount
-    ) internal
+    ) internal returns (bool)
     {
         _beforeRepay(token, amount);
 
@@ -319,9 +320,13 @@ contract Borrowing is
 
         emit LoanPartiallyRepaid(account, token, amount);
 
-        if (_accountDebitShares[token][account] == 0) {
+        // handle low division precision artifact
+        if (_accountDebitShares[token][account] <= 1) {
             emit LoanFullyRepaid(account, token);
+            return true;
         }
+
+        return false;
     }
 
     function _beforeRepay(IERC20Metadata token, uint256 amount) internal virtual {}
