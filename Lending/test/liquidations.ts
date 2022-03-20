@@ -27,7 +27,7 @@ import {
 const WBTC_ADDRESS = '0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599';
 
 
-xdescribe('Liquidations component', () => {
+describe('Liquidations component', () => {
     let owner : SignerWithAddress;
     let alice : SignerWithAddress;
     let bob : SignerWithAddress;

@@ -13,7 +13,7 @@ import {
     createTokenMock,
     deployContract,
     executeInSingleBlock,
-    txExec, waitForTxs
+    txExec
 } from './helpers/utils';
 
 
@@ -423,16 +423,16 @@ describe('Interest component', () => {
                             smplToken1,
                             ethers.utils.parseUnits('100', 18)
                         )
-                    ], 31516);
+                    ], 31506);
                 });
-
+                
                 it('Should increase total debit', async() => {
                     // 200 * 5% * 31536 / 31536000 = 0.01
                     expect(
                         await mainContract.getTotalTokenDebit(smplToken1.address)
                     ).to.be.equal(ethers.utils.parseUnits('200.01', 18));
                 });
-
+                
                 it('Should increase Alice debit', async() => {
                     // 0.01 * (200 / 200) = 0.01
                     expect(
@@ -446,21 +446,21 @@ describe('Interest component', () => {
                         await mainContract.getTotalTokenDeposit(smplToken1.address)
                     ).to.be.equal(ethers.utils.parseUnits('1700.01', 18));
                 });
-
+                
                 it('Should increase tresoury deposit', async() => {
                     // 0.01 * 10% = 0.001
                     expect(
                         await mainContract.getAccountTokenDeposit(smplToken1.address, mainContract.address)
                     ).to.be.equal(ethers.utils.parseUnits('0.001', 18).sub(1));
                 });
-
+                
                 it('Should increase deposits of Bob', async() => {
                     // 0.009 * (1000 / 1600) = 0.005625
                     expect(
                         await mainContract.getAccountTokenDeposit(smplToken1.address, bob.address)
                     ).to.be.equal(ethers.utils.parseUnits('1000.005625', 18));
                 });
-
+                
                 it('Should increase deposits of Carol', async() => {
                     // 0.009 * (600 / 1600) = 0.003375
                     expect(
@@ -480,27 +480,27 @@ describe('Interest component', () => {
                             smplToken2,
                             ethers.utils.parseUnits('100', 18)
                         )
-                    ], 31516);
+                    ], 31506);
                 });
-
+                
                 it('Should increase total debit', async() => {
                     // 500 * 70% * 31536 / 31536000 = 0.35
                     expect(
                         await mainContract.getTotalTokenDebit(smplToken2.address)
                     ).to.be.equal(ethers.utils.parseUnits('500.35', 18));
                 });
-
+                
                 it('Should increase Alice debit', async() => {
                     // 0.35 * (200 / 500) = 0.14
                     expect(
                         await mainContract.getAccountTokenDebit(smplToken2.address, alice.address)
                     ).to.be.equal(ethers.utils.parseUnits('200.14', 18));
                 });
-
+                
                 it('Should increase Carol debit', async() => {
                     // 0.35 * (300 / 500) = 0.21
                     expect(
-                        await mainContract.getAccountTokenDebit(smplToken2.address, alice.address)
+                        await mainContract.getAccountTokenDebit(smplToken2.address, carol.address)
                     ).to.be.equal(ethers.utils.parseUnits('300.21', 18));
                 });
                 
@@ -510,26 +510,26 @@ describe('Interest component', () => {
                         await mainContract.getTotalTokenDeposit(smplToken2.address)
                     ).to.be.equal(ethers.utils.parseUnits('1100.35', 18));
                 });
-
+                
                 it('Should increase tresoury deposit', async() => {
-                    // 0.35 * 10% = 0.035
+                    // 0.35 * 15% = 0.0525
                     expect(
                         await mainContract.getAccountTokenDeposit(smplToken2.address, mainContract.address)
-                    ).to.be.equal(ethers.utils.parseUnits('0.035', 18).sub(1));
+                    ).to.be.equal(ethers.utils.parseUnits('0.0525', 18).sub(1));
                 });
-
+                
                 it('Should increase deposits of Bob', async() => {
-                    // 0.315 * (500 / 1000) = 0.1575
+                    // 0.2975 * (500 / 1000) = 0.14875
                     expect(
                         await mainContract.getAccountTokenDeposit(smplToken2.address, bob.address)
-                    ).to.be.equal(ethers.utils.parseUnits('500.1575', 18));
+                    ).to.be.equal(ethers.utils.parseUnits('500.14875', 18));
                 });
-
+                
                 it('Should increase deposits of Carol', async() => {
-                    // 0.315 * (500 / 1000) = 0.1575
+                    // 0.2975 * (500 / 1000) = 0.14875
                     expect(
                         await mainContract.getAccountTokenDeposit(smplToken2.address, bob.address)
-                    ).to.be.equal(ethers.utils.parseUnits('500.1575', 18));
+                    ).to.be.equal(ethers.utils.parseUnits('500.14875', 18));
                 });
             });
             
@@ -546,14 +546,14 @@ describe('Interest component', () => {
                         )
                     ], 31516);
                 });
-
+                
                 it('Should increase total debit', async() => {
                     // 200 * 220% * 31536 / 31536000 = 0.44
                     expect(
                         await mainContract.getTotalTokenDebit(smplToken3.address)
                     ).to.be.equal(ethers.utils.parseUnits('200.44', 18));
                 });
-
+                
                 it('Should increase Alice debit', async() => {
                     // 0.44 * (200 / 200) = 0.44
                     expect(
@@ -567,19 +567,19 @@ describe('Interest component', () => {
                         await mainContract.getTotalTokenDeposit(smplToken3.address)
                     ).to.be.equal(ethers.utils.parseUnits('350.44', 18));
                 });
-
+                
                 it('Should increase tresoury deposit', async() => {
-                    // 0.44 * 10% = 0.044
+                    // 0.44 * 20% = 0.088
                     expect(
                         await mainContract.getAccountTokenDeposit(smplToken3.address, mainContract.address)
-                    ).to.be.equal(ethers.utils.parseUnits('0.044', 18).sub(1));
+                    ).to.be.equal(ethers.utils.parseUnits('0.088', 18).sub(1));
                 });
-
+                
                 it('Should increase deposits of Carol', async() => {
-                    // 0.396 * (250 / 250) = 0.396
+                    // 0.352 * (250 / 250) = 0.352
                     expect(
-                        await mainContract.getAccountTokenDeposit(smplToken3.address, bob.address)
-                    ).to.be.equal(ethers.utils.parseUnits('250.396', 18));
+                        await mainContract.getAccountTokenDeposit(smplToken3.address, carol.address)
+                    ).to.be.equal(ethers.utils.parseUnits('250.352', 18).add(1));
                 });
             });
             
