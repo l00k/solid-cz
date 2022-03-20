@@ -18,7 +18,7 @@ const WBTC_ADDRESS = '0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599';
 const WBTC_PRICEFEED_ADDRESS = '0xF4030086522a5bEEa4988F8cA5B36dbC97BeE88c';
 
 
-describe('Assets component', () => {
+xdescribe('Assets component', () => {
     let owner : SignerWithAddress;
     let alice : SignerWithAddress;
     
@@ -64,36 +64,41 @@ describe('Assets component', () => {
     
     describe('Initial state', () => {
         it('Should return empty assets list', async() => {
-            const tokens = await mainContract.getSupportedTokens();
-            expect(tokens).to.be.eql([]);
+            expect(
+                await mainContract.getSupportedTokens()
+            ).to.be.eql([]);
         });
     });
     
     
     describe('For not supported token', () => {
         it('Should return token is not supported', async() => {
-            const isSupported = await mainContract.isTokenSupported(smplToken.address);
-            expect(isSupported).to.be.eql(false);
+            expect(
+                await mainContract.isTokenSupported(smplToken.address)
+            ).to.be.eql(false);
         });
         
         it('getPriceFeed() should revert', async() => {
-            const query = mainContract.getPriceFeed(smplToken.address);
-            await expect(query).to.be.revertedWith('TokenIsNotSupported()');
+            expect(
+                mainContract.getPriceFeed(smplToken.address)
+            ).to.be.revertedWith('TokenIsNotSupported()');
         });
         
         it('getTokenPrice() should revert', async() => {
-            const query = mainContract.getTokenPrice(smplToken.address);
-            await expect(query).to.be.revertedWith('TokenIsNotSupported()');
+            expect(
+                mainContract.getTokenPrice(smplToken.address)
+            ).to.be.revertedWith('TokenIsNotSupported()');
         });
         
         it('setPriceFeed() should revert', async() => {
-            const tx = mainContract
-                .connect(owner)
-                .setPriceFeed(
-                    smplToken.address,
-                    priceFeedContract.address
-                );
-            await expect(tx).to.revertedWith('TokenIsNotSupported()');
+            expect(
+                mainContract
+                    .connect(owner)
+                    .setPriceFeed(
+                        smplToken.address,
+                        priceFeedContract.address
+                    )
+            ).to.revertedWith('TokenIsNotSupported()');
         });
     });
     
@@ -138,18 +143,21 @@ describe('Assets component', () => {
             });
             
             it('Should return new item in getter', async() => {
-                const tokens = await mainContract.getSupportedTokens();
-                expect(tokens).to.include(smplToken.address);
+                expect(
+                    await mainContract.getSupportedTokens()
+                ).to.include(smplToken.address);
             });
             
             it('Should return token is supported', async() => {
-                const isSupported = await mainContract.isTokenSupported(smplToken.address);
-                expect(isSupported).to.be.eql(true);
+                expect(
+                    await mainContract.isTokenSupported(smplToken.address)
+                ).to.be.eql(true);
             });
             
             it('Should return price feed by token', async() => {
-                const priceFeed = await mainContract.getPriceFeed(smplToken.address);
-                expect(priceFeed).to.be.equal(priceFeedContract.address);
+                expect(
+                    await mainContract.getPriceFeed(smplToken.address)
+                ).to.be.equal(priceFeedContract.address);
             });
         });
     });
@@ -169,13 +177,14 @@ describe('Assets component', () => {
         });
         
         it('Should not allow to add already supported token asset', async() => {
-            const tx = mainContract
-                .connect(owner)
-                .addSupportedAsset(
-                    smplToken.address,
-                    priceFeedContract.address
-                );
-            await expect(tx).to.be.revertedWith('TokenIsAlreadySupported()');
+            expect(
+                mainContract
+                    .connect(owner)
+                    .addSupportedAsset(
+                        smplToken.address,
+                        priceFeedContract.address
+                    )
+            ).to.be.revertedWith('TokenIsAlreadySupported()');
         });
         
         
@@ -187,8 +196,9 @@ describe('Assets component', () => {
             });
             
             it('Should return token price', async() => {
-                const price = await mainContract.getTokenPrice(smplToken.address);
-                expect(price).to.be.equal(ethers.utils.parseUnits('25', 8));
+                expect(
+                    await mainContract.getTokenPrice(smplToken.address)
+                ).to.be.equal(ethers.utils.parseUnits('25', 8));
             });
         });
         
@@ -234,8 +244,9 @@ describe('Assets component', () => {
                 });
                 
                 it('Should return updated item in getter', async() => {
-                    const assetConfig = await mainContract.getPriceFeed(smplToken.address);
-                    expect(assetConfig).to.be.equal(UPDATED_PRICEFEED_ADDRESS);
+                    expect(
+                        await mainContract.getPriceFeed(smplToken.address)
+                    ).to.be.equal(UPDATED_PRICEFEED_ADDRESS);
                 });
             });
         });

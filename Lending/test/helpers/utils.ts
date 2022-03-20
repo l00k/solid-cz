@@ -55,12 +55,13 @@ export function assertEvent<T extends TypedEvent> (
 {
     const event = findEvent(result, eventName, offset);
     
-    for (const [ property, value ] of Object.entries(eventArgs)) {
-        if (typeof value === 'object' && value.constructor !== BigNumber) {
-            expect(event.args[property]).to.containSubset(value);
+    for (const [ property, expected ] of Object.entries(eventArgs)) {
+        const given = event.args[property];
+        if (typeof given === 'object' && !given._isBigNumber) {
+            expect(given).to.containSubset(expected);
         }
         else {
-            expect(event.args[property]).to.be.eql(value);
+            expect(given).to.be.eql(expected);
         }
     }
 }
@@ -133,24 +134,25 @@ export async function txExec (txPromise : Promise<ContractTransaction>) : Promis
 
 export async function executeInSingleBlock (
     callback : () => Promise<Promise<ContractTransaction>[] | void>,
-    nextBlockDelay : number = 10
+    nextBlockDelay : number = 10,
+    additionalWaitTime : number = 10,
 ) : Promise<ContractTransaction[]>
 {
     await network.provider.send('evm_setAutomine', [ false ]);
     
-    const promises = await callback();
+    const txPromises = await callback();
     await mineBlock(nextBlockDelay);
     
     await network.provider.send('evm_setAutomine', [ true ]);
     
-    await mineBlock(1);
+    await mineBlock(additionalWaitTime);
     
     const txs = [];
-    
-    if (promises) {
-        for (const promise of promises) {
-            const tx = await promise;
-            const result = await tx.wait(0);
+    if (txPromises) {
+        for (const txPromise of txPromises) {
+            const tx = await txPromise;
+            const result = await tx.wait();
+            
             expect(result.status).to.be.equal(1);
             txs.push(tx);
         }
@@ -166,7 +168,7 @@ export async function waitForTxs (txs : ContractTransaction[], checkCallback? : 
     const results = [];
     
     for (const tx of txs) {
-        const result = await tx.wait();
+        const result = await tx.wait(0);
         expect(result.status).to.be.equal(1);
         
         if (checkCallback) {

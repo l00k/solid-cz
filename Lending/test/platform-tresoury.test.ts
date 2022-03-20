@@ -10,7 +10,14 @@ import { SignerWithAddress } from '@nomiclabs/hardhat-ethers/signers';
 import { expect } from 'chai';
 import { BigNumber } from 'ethers';
 import { ethers } from 'hardhat';
-import { assertEvent, assertIsAvailableOnlyForOwner, createTokenMock, deployContract, txExec } from './helpers/utils';
+import {
+    assertEvent,
+    assertIsAvailableOnlyForOwner,
+    createTokenMock,
+    deployContract,
+    executeInSingleBlock,
+    txExec, waitForTxs
+} from './helpers/utils';
 
 const SMPL_PRICEFEED_ADDRESS = '0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419';
 
@@ -18,7 +25,7 @@ const WBTC_ADDRESS = '0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599';
 const WBTC_PRICEFEED_ADDRESS = '0xF4030086522a5bEEa4988F8cA5B36dbC97BeE88c';
 
 
-describe('Platform tresoury component', () => {
+xdescribe('Platform tresoury component', () => {
     let owner : SignerWithAddress;
     let alice : SignerWithAddress;
     let bob : SignerWithAddress;
@@ -141,23 +148,26 @@ describe('Platform tresoury component', () => {
     
     describe('Initial state', () => {
         it('Should return zero platform commission', async() => {
-            const deposit = await mainContract.getTokenPlatformCommission(smplToken.address);
-            expect(deposit).to.be.equal(0);
+            expect(
+                await mainContract.getTokenPlatformCommission(smplToken.address)
+            ).to.be.equal(0);
         });
     });
     
     
     describe('For non supported token', () => {
         it('getTokenPlatformCommission() should revert', async() => {
-            const query = mainContract.getTokenPlatformCommission(WBTC_ADDRESS);
-            await expect(query).to.be.revertedWith('TokenIsNotSupported()');
+            expect(
+                mainContract.getTokenPlatformCommission(WBTC_ADDRESS)
+            ).to.be.revertedWith('TokenIsNotSupported()');
         });
         
         it('setTokenPlatformCommission() should revert', async() => {
-            const tx = mainContract
-                .connect(owner)
-                .setTokenPlatformCommission(WBTC_ADDRESS, 1e5);
-            await expect(tx).to.be.revertedWith('TokenIsNotSupported()');
+            expect(
+                mainContract
+                    .connect(owner)
+                    .setTokenPlatformCommission(WBTC_ADDRESS, 1e7)
+            ).to.be.revertedWith('TokenIsNotSupported()');
         });
         
         it('withdrawFromPlatformTresoury() should revert', async() => {
@@ -180,7 +190,7 @@ describe('Platform tresoury component', () => {
                     .connect(account)
                     .setTokenPlatformCommission(
                         smplToken.address,
-                        1e5
+                        1e7
                     );
             });
         });
@@ -191,13 +201,13 @@ describe('Platform tresoury component', () => {
                     .connect(owner)
                     .setTokenPlatformCommission(
                         smplToken.address,
-                        1e5
+                        1e7
                     )
             );
             
             await assertEvent<PlatformCommissionChangedEvent>(result, 'PlatformCommissionChanged', {
                 token: smplToken.address,
-                fraction: 1e5,
+                fraction: BigNumber.from(1e7),
             });
         });
         
@@ -208,14 +218,15 @@ describe('Platform tresoury component', () => {
                         .connect(owner)
                         .setTokenPlatformCommission(
                             smplToken.address,
-                            1e5
+                            1e7
                         )
                 );
             });
             
             it('Should update state', async() => {
-                const fraction = await mainContract.getTokenPlatformCommission(smplToken.address);
-                expect(fraction).to.be.equal(1e5);
+                expect(
+                    await mainContract.getTokenPlatformCommission(smplToken.address)
+                ).to.be.equal(1e7);
             });
         });
     });
@@ -223,23 +234,20 @@ describe('Platform tresoury component', () => {
     
     describe('with platform commission configured', () => {
         beforeEach(async() => {
-            await txExec(
+            await executeInSingleBlock(async() => [
                 mainContract
                     .connect(owner)
                     .setTokenPlatformCommission(
                         smplToken.address,
-                        1e5
-                    )
-            );
-            
-            await txExec(
+                        1e7
+                    ),
                 mainContract
                     .connect(owner)
                     .setTokenPlatformCommission(
                         smplToken2.address,
-                        2e5
-                    )
-            );
+                        2e7
+                    ),
+            ]);
         });
         
         
@@ -253,8 +261,9 @@ describe('Platform tresoury component', () => {
                         )
                 );
                 
-                const deposit = await mainContract.getAccountTokenDeposit(smplToken.address, alice.address);
-                expect(deposit).to.be.equal(ethers.utils.parseUnits('190', 18));
+                expect(
+                    await mainContract.getAccountTokenDeposit(smplToken.address, alice.address)
+                ).to.be.equal(ethers.utils.parseUnits('190', 18));
             });
             
             it('Should increase tresoury deposit', async() => {
@@ -266,8 +275,9 @@ describe('Platform tresoury component', () => {
                         )
                 );
                 
-                const deposit = await mainContract.getAccountTokenDeposit(smplToken.address, mainContract.address);
-                expect(deposit).to.be.equal(ethers.utils.parseUnits('10', 18).sub(1));
+                expect(
+                    await mainContract.getAccountTokenDeposit(smplToken.address, mainContract.address)
+                ).to.be.equal(ethers.utils.parseUnits('10', 18).sub(1));
             });
             
             it('Should emit event', async() => {
@@ -300,13 +310,15 @@ describe('Platform tresoury component', () => {
             
             
             it('Should return proper deposit', async() => {
-                const deposit = await mainContract.getAccountTokenDeposit(smplToken.address, mainContract.address);
-                expect(deposit).to.be.equal(ethers.utils.parseUnits('10', 18).sub(1));
+                expect(
+                    await mainContract.getAccountTokenDeposit(smplToken.address, mainContract.address)
+                ).to.be.equal(ethers.utils.parseUnits('10', 18).sub(1));
             });
             
             it('Should return proper withdrawable amount', async() => {
-                const value = await mainContract.getAccountTokenWithdrawable(smplToken.address, mainContract.address);
-                expect(value).to.be.equal(ethers.utils.parseUnits('10', 18).sub(1));
+                expect(
+                    await mainContract.getAccountTokenWithdrawable(smplToken.address, mainContract.address)
+                ).to.be.equal(ethers.utils.parseUnits('10', 18).sub(1));
             });
             
             

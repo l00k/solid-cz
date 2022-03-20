@@ -182,17 +182,17 @@ contract Borrowing is
             return 0;
         }
 
-        uint32 collateralFactor = getTokenCollateralFactor(token);
+        uint64 collateralFactor = getTokenCollateralFactor(token);
 
         if (collateralFactor > 0) {
             uint8 tokenDecimals = token.decimals();
             uint256 tokenPrice = getTokenPrice(token);
 
             // maxWithdrawable(<tokenDecimals> digits precise) =
-            //      liquidity (8 digits precise)
-            //      / collateralFactor(6 digits precise)
+            //      liquidity(8 digits precise)
+            //      / collateralFactor(8 digits precise)
             //      / tokenPrice (8 digits precise)
-            uint256 maxWithdrawable = uint256(liquidity) * (10 ** (tokenDecimals + 6))
+            uint256 maxWithdrawable = uint256(liquidity) * (10 ** (tokenDecimals + 8))
                 / collateralFactor
                 / tokenPrice;
 

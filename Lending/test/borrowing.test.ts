@@ -16,7 +16,7 @@ import { assertEvent, assertIsAvailableOnlyForOwner, createTokenMock, deployCont
 const WBTC_ADDRESS = '0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599';
 
 
-describe('Borrowing component', () => {
+xdescribe('Borrowing component', () => {
     let owner : SignerWithAddress;
     let alice : SignerWithAddress;
     let bob : SignerWithAddress;
@@ -148,7 +148,7 @@ describe('Borrowing component', () => {
                 .connect(owner)
                 .setTokenCollateralFactor(
                     smplToken.address,
-                    2.5e5
+                    2.5e7
                 )
         );
         
@@ -157,7 +157,7 @@ describe('Borrowing component', () => {
                 .connect(owner)
                 .setTokenCollateralFactor(
                     smplToken2.address,
-                    5e5
+                    5e7
                 )
         );
     });
@@ -165,33 +165,39 @@ describe('Borrowing component', () => {
     
     describe('Initial state', () => {
         it('Should return proper token available to borrow in total', async() => {
-            const amount = await mainContract.getTotalTokenBorrowable(smplToken.address);
-            expect(amount).to.be.equal(0);
+            expect(
+                await mainContract.getTotalTokenBorrowable(smplToken.address)
+            ).to.be.equal(0);
         });
         
         it('Should return proper token available to borrow by account', async() => {
-            const amount = await mainContract.getAccountTokenBorrowable(smplToken.address, alice.address);
-            expect(amount).to.be.equal(0);
+            expect(
+                await mainContract.getAccountTokenBorrowable(smplToken.address, alice.address)
+            ).to.be.equal(0);
         });
         
         it('Should return proper token debit by account', async() => {
-            const amount = await mainContract.getAccountTokenDebit(smplToken.address, alice.address);
-            expect(amount).to.be.equal(0);
+            expect(
+                await mainContract.getAccountTokenDebit(smplToken.address, alice.address)
+            ).to.be.equal(0);
         });
         
         it('Should return proper total debit by account', async() => {
-            const amount = await mainContract.getAccountDebitValue(alice.address);
-            expect(amount).to.be.equal(0);
+            expect(
+                await mainContract.getAccountDebitValue(alice.address)
+            ).to.be.equal(0);
         });
         
         it('Should return proper withdrawable amount by account', async() => {
-            const amount = await mainContract.getAccountTokenWithdrawable(smplToken.address, alice.address);
-            expect(amount).to.be.equal(0);
+            expect(
+                await mainContract.getAccountTokenWithdrawable(smplToken.address, alice.address)
+            ).to.be.equal(0);
         });
         
         it('Should return proper borrowed amount', async() => {
-            const amount = await mainContract.getTotalTokenDebit(smplToken.address);
-            expect(amount).to.be.equal(0);
+            expect(
+                await mainContract.getTotalTokenDebit(smplToken.address)
+            ).to.be.equal(0);
         });
         
         it('Repaying should do nothing', async() => {
@@ -210,32 +216,37 @@ describe('Borrowing component', () => {
     
     describe('For not supported token', () => {
         it('getTotalTokenBorrowable() should revert', async() => {
-            const query = mainContract.getTotalTokenBorrowable(WBTC_ADDRESS);
-            await expect(query).to.be.revertedWith('TokenIsNotSupported()');
+            expect(
+                mainContract.getTotalTokenBorrowable(WBTC_ADDRESS)
+            ).to.be.revertedWith('TokenIsNotSupported()');
         });
         
         it('getAccountTokenBorrowable() should revert', async() => {
-            const query = mainContract.getAccountTokenBorrowable(WBTC_ADDRESS, alice.address);
-            await expect(query).to.be.revertedWith('TokenIsNotSupported()');
+            expect(
+                mainContract.getAccountTokenBorrowable(WBTC_ADDRESS, alice.address)
+            ).to.be.revertedWith('TokenIsNotSupported()');
         });
         
         it('getAccountTokenDebit() should revert', async() => {
-            const query = mainContract.getAccountTokenDebit(WBTC_ADDRESS, alice.address);
-            await expect(query).to.be.revertedWith('TokenIsNotSupported()');
+            expect(
+                mainContract.getAccountTokenDebit(WBTC_ADDRESS, alice.address)
+            ).to.be.revertedWith('TokenIsNotSupported()');
         });
         
         it('getAccountTokenWithdrawable() should revert', async() => {
-            const tx = mainContract
-                .connect(alice)
-                .getAccountTokenWithdrawable(WBTC_ADDRESS, alice.address);
-            await expect(tx).to.be.revertedWith('TokenIsNotSupported()');
+            expect(
+                mainContract
+                    .connect(alice)
+                    .getAccountTokenWithdrawable(WBTC_ADDRESS, alice.address)
+            ).to.be.revertedWith('TokenIsNotSupported()');
         });
         
         it('getTotalTokenDebit() should revert', async() => {
-            const tx = mainContract
-                .connect(alice)
-                .getTotalTokenDebit(WBTC_ADDRESS);
-            await expect(tx).to.be.revertedWith('TokenIsNotSupported()');
+            expect(
+                mainContract
+                    .connect(alice)
+                    .getTotalTokenDebit(WBTC_ADDRESS)
+            ).to.be.revertedWith('TokenIsNotSupported()');
         });
         
         it('borrow() should revert', async() => {
@@ -283,19 +294,23 @@ describe('Borrowing component', () => {
         
         
         it('Should return proper token available to borrow in total', async() => {
-            const amount = await mainContract.getTotalTokenBorrowable(smplToken.address);
-            expect(amount).to.be.equal(ethers.utils.parseUnits('500', 18));
+            expect(
+                await mainContract.getTotalTokenBorrowable(smplToken.address)
+            ).to.be.equal(ethers.utils.parseUnits('500', 18));
             
-            const amount2 = await mainContract.getTotalTokenBorrowable(smplToken2.address);
-            expect(amount2).to.be.equal(ethers.utils.parseUnits('400', 12));
+            expect(
+                await mainContract.getTotalTokenBorrowable(smplToken2.address)
+            ).to.be.equal(ethers.utils.parseUnits('400', 12));
         });
         
         it('Should return proper token available to borrow by account', async() => {
-            const amount = await mainContract.getAccountTokenBorrowable(smplToken.address, alice.address);
-            expect(amount).to.be.equal(0);
+            expect(
+                await mainContract.getAccountTokenBorrowable(smplToken.address, alice.address)
+            ).to.be.equal(0);
             
-            const amount2 = await mainContract.getAccountTokenBorrowable(smplToken2.address, alice.address);
-            expect(amount).to.be.equal(0);
+            expect(
+                await mainContract.getAccountTokenBorrowable(smplToken2.address, alice.address)
+            ).to.be.equal(0);
         });
         
         it('Should not be possible to borrow more than account liquidity', async() => {
@@ -321,16 +336,19 @@ describe('Borrowing component', () => {
             
             
             it('Should return proper account liquidity', async() => {
-                const collateralization = await mainContract.getAccountCollateralization(alice.address);
-                expect(collateralization).to.be.equal(ethers.utils.parseUnits('6250', 8));
+                expect(
+                    await mainContract.getAccountCollateralization(alice.address)
+                ).to.be.equal(ethers.utils.parseUnits('6250', 8));
             });
             
             it('Should return proper token available to borrow', async() => {
-                const amount = await mainContract.getTotalTokenBorrowable(smplToken.address);
-                expect(amount).to.be.equal(ethers.utils.parseUnits('1500', 18));
+                expect(
+                    await mainContract.getTotalTokenBorrowable(smplToken.address)
+                ).to.be.equal(ethers.utils.parseUnits('1500', 18));
                 
-                const amount2 = await mainContract.getTotalTokenBorrowable(smplToken2.address);
-                expect(amount2).to.be.equal(ethers.utils.parseUnits('400', 12));
+                expect(
+                    await mainContract.getTotalTokenBorrowable(smplToken2.address)
+                ).to.be.equal(ethers.utils.parseUnits('400', 12));
             });
             
             it('Should return proper token available to borrow by account', async() => {
@@ -347,8 +365,9 @@ describe('Borrowing component', () => {
             });
             
             it('Should return proper withdrawable amount', async() => {
-                const amount = await mainContract.getAccountTokenWithdrawable(smplToken.address, alice.address);
-                expect(amount).to.be.equal(ethers.utils.parseUnits('1000', 18));
+                expect(
+                    await mainContract.getAccountTokenWithdrawable(smplToken.address, alice.address)
+                ).to.be.equal(ethers.utils.parseUnits('1000', 18));
             });
             
             
@@ -424,23 +443,27 @@ describe('Borrowing component', () => {
                 });
                 
                 it('Should reduce account liqudity', async() => {
-                    const collateralization = await mainContract.getAccountCollateralization(alice.address);
-                    expect(collateralization).to.be.equal(ethers.utils.parseUnits('5250', 8));
+                    expect(
+                        await mainContract.getAccountCollateralization(alice.address)
+                    ).to.be.equal(ethers.utils.parseUnits('5250', 8));
                 });
                 
                 it('Should return proper borrowed amount', async() => {
-                    const amount = await mainContract.getTotalTokenDebit(smplToken2.address);
-                    expect(amount).to.be.equal(ethers.utils.parseUnits('100', 12));
+                    expect(
+                        await mainContract.getTotalTokenDebit(smplToken2.address)
+                    ).to.be.equal(ethers.utils.parseUnits('100', 12));
                 });
                 
                 it('Should return proper token debit', async() => {
-                    const debit = await mainContract.getAccountTokenDebit(smplToken2.address, alice.address);
-                    expect(debit).to.be.equal(ethers.utils.parseUnits('100', 12));
+                    expect(
+                        await mainContract.getAccountTokenDebit(smplToken2.address, alice.address)
+                    ).to.be.equal(ethers.utils.parseUnits('100', 12));
                 });
                 
                 it('Should return proper debit value', async() => {
-                    const debit = await mainContract.getAccountDebitValue(alice.address);
-                    expect(debit).to.be.equal(ethers.utils.parseUnits('1000', 8));
+                    expect(
+                        await mainContract.getAccountDebitValue(alice.address)
+                    ).to.be.equal(ethers.utils.parseUnits('1000', 8));
                 });
                 
                 it('Should return proper token available to borrow by account', async() => {
@@ -486,24 +509,28 @@ describe('Borrowing component', () => {
                     });
                     
                     it('Should have 0 withdrawable amount', async() => {
-                        const amount = await mainContract.getAccountTokenWithdrawable(smplToken.address, alice.address);
-                        expect(amount).to.be.equal(0);
+                        expect(
+                            await mainContract.getAccountTokenWithdrawable(smplToken.address, alice.address)
+                        ).to.be.equal(0);
                     });
                     
                     it('Should have 0 token available to borrow by account', async() => {
-                        const amount = await mainContract.getAccountTokenBorrowable(smplToken.address, alice.address);
-                        expect(amount).to.be.equal(0);
+                        expect(
+                            await mainContract.getAccountTokenBorrowable(smplToken.address, alice.address)
+                        ).to.be.equal(0);
                     });
                     
                     it('Should have 0 token available to borrow by account', async() => {
-                        const amount2 = await mainContract.getAccountTokenBorrowable(smplToken2.address, alice.address);
-                        expect(amount2).to.be.equal(0);
+                        expect(
+                            await mainContract.getAccountTokenBorrowable(smplToken2.address, alice.address)
+                        ).to.be.equal(0);
                     });
                     
                     it('Should have negative liqudity after collateral asset price drop', async() => {
                         // 1000 * 1 * 0.25 - 100 * 10
-                        const collateralization = await mainContract.getAccountCollateralization(alice.address);
-                        expect(collateralization).to.be.equal(ethers.utils.parseUnits('-750', 8));
+                        expect(
+                            await mainContract.getAccountCollateralization(alice.address)
+                        ).to.be.equal(ethers.utils.parseUnits('-750', 8));
                     });
                 });
                 
@@ -600,23 +627,27 @@ describe('Borrowing component', () => {
                     });
                     
                     it('Should increase account liqudity', async() => {
-                        const collateralization = await mainContract.getAccountCollateralization(alice.address);
-                        expect(collateralization).to.be.equal(ethers.utils.parseUnits('5750', 8));
+                        expect(
+                            await mainContract.getAccountCollateralization(alice.address)
+                        ).to.be.equal(ethers.utils.parseUnits('5750', 8));
                     });
                     
                     it('Should return proper borrowed amount', async() => {
-                        const amount = await mainContract.getTotalTokenDebit(smplToken2.address);
-                        expect(amount).to.be.equal(ethers.utils.parseUnits('50', 12));
+                        expect(
+                            await mainContract.getTotalTokenDebit(smplToken2.address)
+                        ).to.be.equal(ethers.utils.parseUnits('50', 12));
                     });
                     
                     it('Should return proper token debit', async() => {
-                        const debit = await mainContract.getAccountTokenDebit(smplToken2.address, alice.address);
-                        expect(debit).to.be.equal(ethers.utils.parseUnits('50', 12));
+                        expect(
+                            await mainContract.getAccountTokenDebit(smplToken2.address, alice.address)
+                        ).to.be.equal(ethers.utils.parseUnits('50', 12));
                     });
                     
                     it('Should return proper debit value', async() => {
-                        const debit = await mainContract.getAccountDebitValue(alice.address);
-                        expect(debit).to.be.equal(ethers.utils.parseUnits('500', 8));
+                        expect(
+                            await mainContract.getAccountDebitValue(alice.address)
+                        ).to.be.equal(ethers.utils.parseUnits('500', 8));
                     });
                     
                     it('Should return proper token available to borrow by account', async() => {
@@ -693,23 +724,27 @@ describe('Borrowing component', () => {
                             });
                             
                             it('Should increase account liqudity', async() => {
-                                const collateralization = await mainContract.getAccountCollateralization(alice.address);
-                                expect(collateralization).to.be.equal(ethers.utils.parseUnits('6250', 8));
+                                expect(
+                                    await mainContract.getAccountCollateralization(alice.address)
+                                ).to.be.equal(ethers.utils.parseUnits('6250', 8));
                             });
                             
                             it('Should return proper borrowed amount', async() => {
-                                const amount = await mainContract.getTotalTokenDebit(smplToken2.address);
-                                expect(amount).to.be.equal(0);
+                                expect(
+                                    await mainContract.getTotalTokenDebit(smplToken2.address)
+                                ).to.be.equal(0);
                             });
                             
                             it('Should return proper token debit', async() => {
-                                const debit = await mainContract.getAccountTokenDebit(smplToken2.address, alice.address);
-                                expect(debit).to.be.equal(0);
+                                expect(
+                                    await mainContract.getAccountTokenDebit(smplToken2.address, alice.address)
+                                ).to.be.equal(0);
                             });
                             
                             it('Should return proper debit value', async() => {
-                                const debit = await mainContract.getAccountDebitValue(alice.address);
-                                expect(debit).to.be.equal(0);
+                                expect(
+                                    await mainContract.getAccountDebitValue(alice.address)
+                                ).to.be.equal(0);
                             });
                             
                             it('Should return proper token available to borrow by account', async() => {
@@ -754,23 +789,27 @@ describe('Borrowing component', () => {
                     });
                     
                     it('Should reduce account liqudity', async() => {
-                        const collateralization = await mainContract.getAccountCollateralization(alice.address);
-                        expect(collateralization).to.be.equal(ethers.utils.parseUnits('4750', 8));
+                        expect(
+                            await mainContract.getAccountCollateralization(alice.address)
+                        ).to.be.equal(ethers.utils.parseUnits('4750', 8));
                     });
                     
                     it('Should return proper borrowed amount', async() => {
-                        const amount = await mainContract.getTotalTokenDebit(smplToken2.address);
-                        expect(amount).to.be.equal(ethers.utils.parseUnits('150', 12));
+                        expect(
+                            await mainContract.getTotalTokenDebit(smplToken2.address)
+                        ).to.be.equal(ethers.utils.parseUnits('150', 12));
                     });
                     
                     it('Should return proper token debit', async() => {
-                        const debit = await mainContract.getAccountTokenDebit(smplToken2.address, alice.address);
-                        expect(debit).to.be.equal(ethers.utils.parseUnits('150', 12));
+                        expect(
+                            await mainContract.getAccountTokenDebit(smplToken2.address, alice.address)
+                        ).to.be.equal(ethers.utils.parseUnits('150', 12));
                     });
                     
                     it('Should return proper debit value', async() => {
-                        const debit = await mainContract.getAccountDebitValue(alice.address);
-                        expect(debit).to.be.equal(ethers.utils.parseUnits('1500', 8));
+                        expect(
+                            await mainContract.getAccountDebitValue(alice.address)
+                        ).to.be.equal(ethers.utils.parseUnits('1500', 8));
                     });
                     
                     it('Should return proper token available to borrow by account', async() => {

@@ -9,22 +9,22 @@ contract PlatformTresoury is
     Deposits
 {
 
-    event PlatformCommissionChanged(IERC20Metadata token, uint32 fraction);
+    event PlatformCommissionChanged(IERC20Metadata token, uint64 fraction);
     event TransferToTresoury(IERC20Metadata token, uint256 amount);
     event WithdrawnFromTresoury(IERC20Metadata token, address to, uint256 amount);
 
     error AmountExceedTresouryDeposit();
 
 
-    // 1 = 0.0001%
-    mapping(IERC20Metadata => uint32) private _platformCommission;
+    // 8 digits precise
+    mapping(IERC20Metadata => uint64) private _platformCommission;
 
     /**
      * @dev
      * Part of rewards which goes to platform
-     * Precission: 6 digits
+     * Precission: 8 digits
      */
-    function getTokenPlatformCommission(IERC20Metadata token) public view onlySupportedAsset(token) returns (uint32)
+    function getTokenPlatformCommission(IERC20Metadata token) public view onlySupportedAsset(token) returns (uint64)
     {
         return _platformCommission[token];
     }
@@ -32,7 +32,7 @@ contract PlatformTresoury is
 
     function setTokenPlatformCommission(
         IERC20Metadata token,
-        uint32 platformCommission
+        uint64 platformCommission
     ) public
         onlySupportedAsset(token)
         onlyOwner
@@ -70,7 +70,7 @@ contract PlatformTresoury is
         uint256 amount
     ) internal
     {
-        uint256 commissionAmount = amount * getTokenPlatformCommission(token) / 1e6;
+        uint256 commissionAmount = amount * getTokenPlatformCommission(token) / 1e8;
         uint256 reducedAmount = amount - commissionAmount;
 
         // distrubute funds to users

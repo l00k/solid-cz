@@ -14,13 +14,13 @@ contract Deposits is
     error AmountExceedWithdrawableLimit();
     error AmountExceedLiquidDeposit();
 
-    event CollateralFactorChanged(IERC20Metadata token, uint32 factor);
+    event CollateralFactorChanged(IERC20Metadata token, uint64 factor);
     event AssetDeposited(address who, IERC20Metadata token, uint256 amount);
     event AssetWithdrawn(address who, IERC20Metadata token, uint256 amount);
 
 
-    // 1 = 0.0001%
-    mapping(IERC20Metadata => uint32) private _tokenCollateralFactors;
+    // 8 digits precise
+    mapping(IERC20Metadata => uint64) private _tokenCollateralFactors;
 
     // token => total deposits
     mapping(IERC20Metadata => uint256) private _totalDeposit;
@@ -31,7 +31,7 @@ contract Deposits is
 
 
 
-    function getTokenCollateralFactor(IERC20Metadata token) public view onlySupportedAsset(token) returns (uint32)
+    function getTokenCollateralFactor(IERC20Metadata token) public view onlySupportedAsset(token) returns (uint64)
     {
         return _tokenCollateralFactors[token];
     }
@@ -150,15 +150,15 @@ contract Deposits is
         IERC20Metadata[] memory tokens = getSupportedTokens();
 
         for (uint256 tid = 0; tid < tokens.length; ++tid) {
-            uint32 collateralFactor = getTokenCollateralFactor(tokens[tid]);
+            uint64 collateralFactor = getTokenCollateralFactor(tokens[tid]);
             (, uint256 tokenDepositValue,) = _getAccountTokenDepositEx(tokens[tid], account);
 
             // liquidity(8 digits precise) =
             //      depositValue(8 digits precise)
-            //      * collateralFactor(6 digits precise)
+            //      * collateralFactor(8 digits precise)
             liquidity += tokenDepositValue
                  * collateralFactor
-                / 1e6;
+                / 1e8;
         }
 
         return int256(liquidity);
@@ -167,7 +167,7 @@ contract Deposits is
 
     function setTokenCollateralFactor(
         IERC20Metadata token,
-        uint32 collateralFactor
+        uint64 collateralFactor
     ) public
         onlySupportedAsset(token)
         onlyOwner
@@ -285,7 +285,7 @@ contract Deposits is
             revert AmountExceedLiquidDeposit();
         }
 
-        _beforeWithdraw(token, fromAccount, toAccount, amount);
+        _beforeWithdraw(token, amount);
 
         _decreaseDepositShares(
             token,
@@ -303,7 +303,7 @@ contract Deposits is
 
         emit AssetWithdrawn(fromAccount, token, amount);
 
-        _afterWithdraw(token, fromAccount, toAccount, amount);
+        _afterWithdraw(token, amount);
     }
 
     function withdraw(
@@ -319,8 +319,8 @@ contract Deposits is
         );
     }
 
-    function _beforeWithdraw(IERC20Metadata token, address fromAccount, address toAccount, uint256 amount) internal virtual {}
-    function _afterWithdraw(IERC20Metadata token, address fromAccount, address toAccount, uint256 amount) internal virtual {}
+    function _beforeWithdraw(IERC20Metadata token, uint256 amount) internal virtual {}
+    function _afterWithdraw(IERC20Metadata token, uint256 amount) internal virtual {}
 
 
 }

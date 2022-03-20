@@ -20,14 +20,14 @@ import {
     createTokenMock,
     deployContract,
     executeInSingleBlock,
-    txExec
+    txExec, waitForTxs
 } from './helpers/utils';
 
 
 const WBTC_ADDRESS = '0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599';
 
 
-describe('Liquidations component', () => {
+xdescribe('Liquidations component', () => {
     let owner : SignerWithAddress;
     let alice : SignerWithAddress;
     let bob : SignerWithAddress;
@@ -114,8 +114,8 @@ describe('Liquidations component', () => {
         name : string,
         symbol : string,
         initialPrice : BigNumber,
-        collateralFactor : number = 5e5,
-        borrowableFraction : number = 5e5
+        collateralFactor : number = 5e7,
+        borrowableFraction : number = 5e7
     ) : Promise<[ TokenMock, PriceFeedMock ]>
     {
         const token : TokenMock = await createTokenMock(name, symbol);
@@ -175,8 +175,9 @@ describe('Liquidations component', () => {
                         .connect(owner)
                         .liquidate(alice.address)
                 );
-                const newState = await mainContract.getAccountCollateralization(alice.address);
-                expect(newState).to.be.equal(prevState);
+                expect(
+                    await mainContract.getAccountCollateralization(alice.address)
+                ).to.be.equal(prevState);
             }
         });
     }
@@ -231,13 +232,15 @@ describe('Liquidations component', () => {
     
     describe('Initial state', () => {
         it('Should return proper liquidation incentive', async() => {
-            const amount = await mainContract.getLiquidationIncentive();
-            expect(amount).to.be.equal(0);
+            expect(
+                await mainContract.getLiquidationIncentive()
+            ).to.be.equal(0);
         });
         
         it('Should return proper collateralization value', async() => {
-            const collateralization = await mainContract.getAccountCollateralization(alice.address);
-            expect(collateralization).to.be.equal(0);
+            expect(
+                await mainContract.getAccountCollateralization(alice.address)
+            ).to.be.equal(0);
         });
         
         checkLiquidatingDoesNothing();
@@ -249,7 +252,7 @@ describe('Liquidations component', () => {
             await assertIsAvailableOnlyForOwner(async(account) => {
                 return mainContract
                     .connect(account)
-                    .setLiquidationIncentive(1e5);
+                    .setLiquidationIncentive(1e7);
             });
         });
         
@@ -257,11 +260,11 @@ describe('Liquidations component', () => {
             const [ tx, result ] = await txExec(
                 mainContract
                     .connect(owner)
-                    .setLiquidationIncentive(1e5)
+                    .setLiquidationIncentive(1e7)
             );
             
             await assertEvent<LiquidationIncentiveChangedEvent>(result, 'LiquidationIncentiveChanged', {
-                fraction: 1e5,
+                fraction: BigNumber.from(1e7),
             });
         });
         
@@ -270,13 +273,14 @@ describe('Liquidations component', () => {
                 await txExec(
                     mainContract
                         .connect(owner)
-                        .setLiquidationIncentive(1e5)
+                        .setLiquidationIncentive(1e7)
                 );
             });
             
             it('Should update state', async() => {
-                const fraction = await mainContract.getLiquidationIncentive();
-                expect(fraction).to.be.equal(1e5);
+                expect(
+                    await mainContract.getLiquidationIncentive()
+                ).to.be.equal(1e7);
             });
         });
     });
@@ -442,14 +446,17 @@ describe('Liquidations component', () => {
                         });
                         
                         it('Should reduce deposit', async() => {
-                            const deposit = await mainContract.getAccountTokenDeposit(smplToken1.address, alice.address);
-                            expect(deposit).to.be.equal(0);
+                            expect(
+                                await mainContract.getAccountTokenDeposit(smplToken1.address, alice.address)
+                            ).to.be.equal(0);
                             
-                            const deposit2 = await mainContract.getAccountTokenDeposit(smplToken2.address, alice.address);
-                            expect(deposit2).to.be.equal(ethers.utils.parseUnits('21', 18).add(1));
+                            expect(
+                                await mainContract.getAccountTokenDeposit(smplToken2.address, alice.address)
+                            ).to.be.equal(ethers.utils.parseUnits('21', 18).add(1));
                             
-                            const deposit3 = await mainContract.getAccountTokenDeposit(smplToken3.address, alice.address);
-                            expect(deposit3).to.be.equal(ethers.utils.parseUnits('50', 18));
+                            expect(
+                                await mainContract.getAccountTokenDeposit(smplToken3.address, alice.address)
+                            ).to.be.equal(ethers.utils.parseUnits('50', 18));
                         });
                         
                         it('Should return proper collateralization value', async() => {
@@ -459,8 +466,9 @@ describe('Liquidations component', () => {
                         });
                         
                         it('Should increase tresoury with liquidation bonus', async() => {
-                            const deposit = await mainContract.getAccountTokenDeposit(smplToken2.address, mainContract.address);
-                            expect(deposit).to.be.equal(ethers.utils.parseUnits('33', 18).div(11).sub(1));
+                            expect(
+                                await mainContract.getAccountTokenDeposit(smplToken2.address, mainContract.address)
+                            ).to.be.equal(ethers.utils.parseUnits('33', 18).div(11).sub(1));
                         });
                     });
                     
@@ -546,14 +554,17 @@ describe('Liquidations component', () => {
                             });
                             
                             it('Should reduce deposit', async() => {
-                                const deposit = await mainContract.getAccountTokenDeposit(smplToken1.address, alice.address);
-                                expect(deposit).to.be.equal(ethers.utils.parseUnits('20', 18));
+                                expect(
+                                    await mainContract.getAccountTokenDeposit(smplToken1.address, alice.address)
+                                ).to.be.equal(ethers.utils.parseUnits('20', 18));
                                 
-                                const deposit2 = await mainContract.getAccountTokenDeposit(smplToken2.address, alice.address);
-                                expect(deposit2).to.be.equal(ethers.utils.parseUnits('19', 18).add(1));
+                                expect(
+                                    await mainContract.getAccountTokenDeposit(smplToken2.address, alice.address)
+                                ).to.be.equal(ethers.utils.parseUnits('19', 18).add(1));
                                 
-                                const deposit3 = await mainContract.getAccountTokenDeposit(smplToken3.address, alice.address);
-                                expect(deposit3).to.be.equal(ethers.utils.parseUnits('50', 18));
+                                expect(
+                                    await mainContract.getAccountTokenDeposit(smplToken3.address, alice.address)
+                                ).to.be.equal(ethers.utils.parseUnits('50', 18));
                             });
                             
                             it('Should return proper collateralization value', async() => {
@@ -563,8 +574,9 @@ describe('Liquidations component', () => {
                             });
                             
                             it('Should increase tresoury with liquidation bonus', async() => {
-                                const deposit = await mainContract.getAccountTokenDeposit(smplToken2.address, mainContract.address);
-                                expect(deposit).to.be.equal(ethers.utils.parseUnits('33', 18).div(11).sub(1));
+                                expect(
+                                    await mainContract.getAccountTokenDeposit(smplToken2.address, mainContract.address)
+                                ).to.be.equal(ethers.utils.parseUnits('33', 18).div(11).sub(1));
                             });
                         });
                     });
@@ -589,7 +601,7 @@ describe('Liquidations component', () => {
                                     ethers.utils.parseUnits('49', 18)
                                 )
                         );
-                    
+                        
                         await executeInSingleBlock(async() => [
                             pushNewPriceIntoFeed(priceFeedContract1, ethers.utils.parseUnits('1', 8)),
                             pushNewPriceIntoFeed(priceFeedContract3, ethers.utils.parseUnits('1', 8)),
@@ -689,14 +701,17 @@ describe('Liquidations component', () => {
                         });
                         
                         it('Should reduce deposit', async() => {
-                            const deposit = await mainContract.getAccountTokenDeposit(smplToken1.address, alice.address);
-                            expect(deposit).to.be.equal(0);
+                            expect(
+                                await mainContract.getAccountTokenDeposit(smplToken1.address, alice.address)
+                            ).to.be.equal(0);
                             
-                            const deposit2 = await mainContract.getAccountTokenDeposit(smplToken2.address, alice.address);
-                            expect(deposit2).to.be.equal(0);
+                            expect(
+                                await mainContract.getAccountTokenDeposit(smplToken2.address, alice.address)
+                            ).to.be.equal(0);
                             
-                            const deposit3 = await mainContract.getAccountTokenDeposit(smplToken3.address, alice.address);
-                            expect(deposit3).to.be.equal(0);
+                            expect(
+                                await mainContract.getAccountTokenDeposit(smplToken3.address, alice.address)
+                            ).to.be.equal(0);
                         });
                         
                         it('Should return proper collateralization value', async() => {
@@ -706,8 +721,9 @@ describe('Liquidations component', () => {
                         });
                         
                         it('Should increase tresoury with liquidation bonus', async() => {
-                            const deposit = await mainContract.getAccountTokenDeposit(smplToken2.address, mainContract.address);
-                            expect(deposit).to.be.equal(ethers.utils.parseUnits('10', 18).div(11));
+                            expect(
+                                await mainContract.getAccountTokenDeposit(smplToken2.address, mainContract.address)
+                            ).to.be.equal(ethers.utils.parseUnits('10', 18).div(11));
                         });
                     });
                 });
@@ -885,14 +901,17 @@ describe('Liquidations component', () => {
                             });
                             
                             it('Should reduce deposit', async() => {
-                                const deposit = await mainContract.getAccountTokenDeposit(smplToken1.address, alice.address);
-                                expect(deposit).to.be.equal(0);
+                                expect(
+                                    await mainContract.getAccountTokenDeposit(smplToken1.address, alice.address)
+                                ).to.be.equal(0);
                                 
-                                const deposit2 = await mainContract.getAccountTokenDeposit(smplToken2.address, alice.address);
-                                expect(deposit2).to.be.equal(ethers.utils.parseUnits('18.8', 18).add(1));
+                                expect(
+                                    await mainContract.getAccountTokenDeposit(smplToken2.address, alice.address)
+                                ).to.be.equal(ethers.utils.parseUnits('18.8', 18).add(1));
                                 
-                                const deposit3 = await mainContract.getAccountTokenDeposit(smplToken3.address, alice.address);
-                                expect(deposit3).to.be.equal(ethers.utils.parseUnits('50', 18));
+                                expect(
+                                    await mainContract.getAccountTokenDeposit(smplToken3.address, alice.address)
+                                ).to.be.equal(ethers.utils.parseUnits('50', 18));
                             });
                             
                             it('Should return proper collateralization value', async() => {
@@ -902,11 +921,13 @@ describe('Liquidations component', () => {
                             });
                             
                             it('Should increase tresoury with liquidation bonus', async() => {
-                                const deposit2 = await mainContract.getAccountTokenDeposit(smplToken2.address, mainContract.address);
-                                expect(deposit2).to.be.equal(ethers.utils.parseUnits('33', 18).div(11).sub(1));
+                                expect(
+                                    await mainContract.getAccountTokenDeposit(smplToken2.address, mainContract.address)
+                                ).to.be.equal(ethers.utils.parseUnits('33', 18).div(11).sub(1));
                                 
-                                const deposit3 = await mainContract.getAccountTokenDeposit(smplToken3.address, mainContract.address);
-                                expect(deposit3).to.be.equal(ethers.utils.parseUnits('22', 18).div(11));
+                                expect(
+                                    await mainContract.getAccountTokenDeposit(smplToken3.address, mainContract.address)
+                                ).to.be.equal(ethers.utils.parseUnits('22', 18).div(11));
                             });
                         });
                     });
@@ -931,7 +952,7 @@ describe('Liquidations component', () => {
                                         ethers.utils.parseUnits('49', 18)
                                     )
                             );
-                        
+                            
                             await executeInSingleBlock(async() => [
                                 pushNewPriceIntoFeed(priceFeedContract1, ethers.utils.parseUnits('1', 8)),
                                 pushNewPriceIntoFeed(priceFeedContract3, ethers.utils.parseUnits('1', 8)),
@@ -1037,14 +1058,17 @@ describe('Liquidations component', () => {
                             });
                             
                             it('Should reduce deposit', async() => {
-                                const deposit = await mainContract.getAccountTokenDeposit(smplToken1.address, alice.address);
-                                expect(deposit).to.be.equal(0);
+                                expect(
+                                    await mainContract.getAccountTokenDeposit(smplToken1.address, alice.address)
+                                ).to.be.equal(0);
                                 
-                                const deposit2 = await mainContract.getAccountTokenDeposit(smplToken2.address, alice.address);
-                                expect(deposit2).to.be.equal(0);
+                                expect(
+                                    await mainContract.getAccountTokenDeposit(smplToken2.address, alice.address)
+                                ).to.be.equal(0);
                                 
-                                const deposit3 = await mainContract.getAccountTokenDeposit(smplToken3.address, alice.address);
-                                expect(deposit3).to.be.equal(0);
+                                expect(
+                                    await mainContract.getAccountTokenDeposit(smplToken3.address, alice.address)
+                                ).to.be.equal(0);
                             });
                             
                             it('Should return proper collateralization value', async() => {
@@ -1054,8 +1078,9 @@ describe('Liquidations component', () => {
                             });
                             
                             it('Should increase tresoury with liquidation bonus', async() => {
-                                const deposit = await mainContract.getAccountTokenDeposit(smplToken2.address, mainContract.address);
-                                expect(deposit).to.be.equal(ethers.utils.parseUnits('10', 18).div(11));
+                                expect(
+                                    await mainContract.getAccountTokenDeposit(smplToken2.address, mainContract.address)
+                                ).to.be.equal(ethers.utils.parseUnits('10', 18).div(11));
                             });
                         });
                     });

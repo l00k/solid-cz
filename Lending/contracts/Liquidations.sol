@@ -10,17 +10,17 @@ contract Liquidations is
     Borrowing
 {
 
-    event LiquidationIncentiveChanged(uint32 fraction);
+    event LiquidationIncentiveChanged(uint64 fraction);
     event LiquidatedDeposit(address who, IERC20Metadata token, uint256 amount);
 
 
-    // 1 = 0.0001%
-    uint32 private _liquidationIncentive;
+    // 8 digits precise
+    uint64 private _liquidationIncentive;
 
     SwapProviderInterface private _swapProvider;
 
 
-    function getLiquidationIncentive() public view returns (uint32)
+    function getLiquidationIncentive() public view returns (uint64)
     {
         return _liquidationIncentive;
     }
@@ -32,7 +32,7 @@ contract Liquidations is
     ) private view returns (uint256)
     {
         uint256 debit = getAccountTokenDebit(token, account);
-        return debit * _liquidationIncentive / 1e6;
+        return debit * _liquidationIncentive / 1e8;
     }
 
     function _getAccountTokenLiquidationAmount(
@@ -41,7 +41,7 @@ contract Liquidations is
     ) private view returns (uint256)
     {
         uint256 debit = getAccountTokenDebit(token, account);
-        uint256 incentiveAmount = debit * _liquidationIncentive / 1e6;
+        uint256 incentiveAmount = debit * _liquidationIncentive / 1e8;
         return debit + incentiveAmount;
     }
 
@@ -102,7 +102,7 @@ contract Liquidations is
     }
 
     function setLiquidationIncentive(
-        uint32 liquidationIncentive
+        uint64 liquidationIncentive
     ) public
         onlyOwner
     {
@@ -209,7 +209,7 @@ contract Liquidations is
         // transfer liquidation bonus to tresoury
         uint256 liquidationBonus = depositLiquidationAmount
             * _liquidationIncentive
-            / (1e6 + _liquidationIncentive);
+            / (1e8 + _liquidationIncentive);
         _depositIntoTresoury(
             token,
             liquidationBonus
@@ -291,7 +291,7 @@ contract Liquidations is
         // transfer liquidation bonus to tresoury
         uint256 liquidationBonus = loanLiquidatedAmount
             * _liquidationIncentive
-            / (1e6 + _liquidationIncentive);
+            / (1e8 + _liquidationIncentive);
         _depositIntoTresoury(
             loanToken,
             liquidationBonus
