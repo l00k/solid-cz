@@ -18,7 +18,7 @@ const WBTC_ADDRESS = '0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599';
 const WBTC_PRICEFEED_ADDRESS = '0xF4030086522a5bEEa4988F8cA5B36dbC97BeE88c';
 
 
-xdescribe('Platform tresoury component', () => {
+describe('Platform tresoury component', () => {
     let owner : SignerWithAddress;
     let alice : SignerWithAddress;
     let bob : SignerWithAddress;

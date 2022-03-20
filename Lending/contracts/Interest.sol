@@ -10,6 +10,7 @@ contract Interest is
 {
 
     event LoanInterestConfigChanged(IERC20Metadata token, LoanInterestConfig interestConfig);
+    event InterestOnTokenApplied(IERC20Metadata token, uint256 amount);
 
 
     struct LoanInterestConfig {
@@ -20,6 +21,8 @@ contract Interest is
     }
 
 
+    uint32 private constant SECONDS_IN_YEAR = 31536000;
+
     /**
      * @dev
      * Difference of debit and loanAcc informs about interest amount
@@ -27,10 +30,8 @@ contract Interest is
      */
     mapping(address => mapping(IERC20Metadata => uint256)) private _accountLoanAcc;
 
-
     // 1 = 0.0001%
     mapping(IERC20Metadata => LoanInterestConfig) private _loanInterestConfig;
-
 
     mapping(IERC20Metadata => uint64) _lastInterestDistribution;
 
@@ -53,10 +54,15 @@ contract Interest is
      * Returns token utilisation - borrowed assets / deposited assets ratio
      * Precission: 6 digits
      */
-    function getTokenDepositUtilisation(
+    function getTokenUtilisation(
         IERC20Metadata token
     ) public view onlySupportedAsset(token) returns (uint32)
     {
+        uint256 totalDeposit = getTotalTokenDeposit(token);
+        if (totalDeposit == 0) {
+            return 0;
+        }
+
         return uint32(
             getTotalTokenDebit(token) * 1e8 / getTotalTokenDeposit(token)
         );
@@ -67,13 +73,13 @@ contract Interest is
      * Returns token borrow interest (depending on utilisation)
      * Precission: 6 digits
      */
-    function getTokenBorrowInterest(
+    function getTokenBorrowInterestRate(
         IERC20Metadata token
     ) public view onlySupportedAsset(token) returns (uint32)
     {
         LoanInterestConfig memory interestConfig = getTokenLoanInterestConfig(token);
 
-        uint32 utilisation = getTokenDepositUtilisation(token);
+        uint32 utilisation = getTokenUtilisation(token);
 
         uint32 interest = interestConfig.base;
 
@@ -90,29 +96,6 @@ contract Interest is
         return interest;
     }
 
-    /**
-     * @dev
-     * Returns token lending interest (reduced by commission)
-     * Precission: 6 digits
-     */
-    function getTokenLendingInterest(
-        IERC20Metadata token
-    ) public view onlySupportedAsset(token) returns (uint32)
-    {
-        uint32 borrowInterest = getTokenBorrowInterest(token);
-        uint32 platformCommission = getTokenPlatformCommission(token);
-
-        // lendingInterest(6 digits precise) =
-        //      borrowInterest(6 digits precise)
-        //      * tokenUtilisation(6 digsts precise)
-        //      * [1 - platformCommission](6 digits precise)
-        return borrowInterest
-            * getTokenDepositUtilisation(token)
-            * (1e6 - platformCommission)
-            / 1e12;
-    }
-
-
 
     function setTokenLoanInterestConfig(
         IERC20Metadata token,
@@ -124,6 +107,93 @@ contract Interest is
         _loanInterestConfig[token] = interestConfig;
 
         emit LoanInterestConfigChanged(token, interestConfig);
+    }
+
+    function _applyInterest() internal
+    {
+        IERC20Metadata[] memory tokens = getSupportedTokens();
+
+        for (uint i=0; i < tokens.length; ++i) {
+            _applyInterestOnToken(tokens[i]);
+        }
+    }
+
+    function _applyInterestOnToken(
+        IERC20Metadata token
+    ) internal
+    {
+        uint64 deltaTime = uint64(block.timestamp) - _lastInterestDistribution[token];
+        if (deltaTime == 0) {
+            return;
+        }
+
+        uint32 interestRate = getTokenBorrowInterestRate(token);
+
+        // amount(token decimals precise) =
+        //      totalDebit(token decimals precise)
+        //      * interestRate(6 digits precise)
+        //      * (deltaTime / SECONDS_IN_YEAR)
+        uint256 interestAmount = getTotalTokenDebit(token)
+            * interestRate
+            * deltaTime
+            / SECONDS_IN_YEAR
+            / 1e6;
+
+        // increase debit (fee)
+        _increaseTotalDebit(
+            token,
+            interestAmount
+        );
+
+        // distribute funds (rewards and tresoury)
+        _distributeFunds(
+            token,
+            interestAmount
+        );
+
+        emit InterestOnTokenApplied(token, interestAmount);
+
+        _lastInterestDistribution[token] = uint64(block.timestamp);
+    }
+
+
+    /**
+     * All external actions which cause debit or deposit shares change
+     * need to apply _applyinterestontoken
+     */
+
+    function _beforeDeposit(
+        IERC20Metadata token,
+        uint256 amount
+    ) internal override
+    {
+        _applyInterestOnToken(token);
+    }
+
+    function _beforeWithdraw(
+        IERC20Metadata token,
+        address fromAccount,
+        address toAccount,
+        uint256 amount
+    ) internal override
+    {
+        _applyInterestOnToken(token);
+    }
+
+    function _beforeBorrow(
+        IERC20Metadata token,
+        uint256 amount
+    ) internal override
+    {
+        _applyInterestOnToken(token);
+    }
+
+    function _beforeRepay(
+        IERC20Metadata token,
+        uint256 amount
+    ) internal override
+    {
+        _applyInterestOnToken(token);
     }
 
 }

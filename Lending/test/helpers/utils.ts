@@ -8,8 +8,10 @@ import chai, { expect } from 'chai';
 import { solidity } from 'ethereum-waffle';
 import { BigNumber, Contract, ContractTransaction, Event } from 'ethers';
 import { ethers, network } from 'hardhat';
+import chaiSubset from 'chai-subset';
 import _ from 'lodash';
 
+chai.use(chaiSubset);
 chai.use(solidity);
 chai.use(smock.matchers);
 
@@ -54,7 +56,12 @@ export function assertEvent<T extends TypedEvent> (
     const event = findEvent(result, eventName, offset);
     
     for (const [ property, value ] of Object.entries(eventArgs)) {
-        expect(event.args[property]).to.be.equal(value);
+        if (typeof value === 'object' && value.constructor !== BigNumber) {
+            expect(event.args[property]).to.containSubset(value);
+        }
+        else {
+            expect(event.args[property]).to.be.eql(value);
+        }
     }
 }
 
