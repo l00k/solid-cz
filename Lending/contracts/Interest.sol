@@ -114,14 +114,6 @@ contract Interest is
         emit LoanInterestConfigChanged(token, interestConfig);
     }
 
-    function _applyInterest() internal
-    {
-        IERC20Metadata[] memory tokens = getSupportedTokens();
-
-        for (uint i=0; i < tokens.length; ++i) {
-            _applyInterestOnToken(tokens[i]);
-        }
-    }
 
     function _applyInterestOnToken(
         IERC20Metadata token

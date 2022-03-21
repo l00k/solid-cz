@@ -33,11 +33,13 @@ describe('Interest component', () => {
     let smplToken1 : TokenMock;
     let smplToken2 : TokenMock;
     let smplToken3 : TokenMock;
+    let smplToken4 : TokenMock;
     
     let priceFeedContract0 : PriceFeedMock;
     let priceFeedContract1 : PriceFeedMock;
     let priceFeedContract2 : PriceFeedMock;
     let priceFeedContract3 : PriceFeedMock;
+    let priceFeedContract4 : PriceFeedMock;
     
     let swapProviderMock : SwapProviderMock;
     
@@ -163,6 +165,12 @@ describe('Interest component', () => {
             ethers.utils.parseUnits('10', 8)
         );
         
+        [ smplToken4, priceFeedContract4 ] = await setupToken(
+            'Sample4',
+            'SMPL4',
+            ethers.utils.parseUnits('10', 8)
+        );
+        
         await executeInSingleBlock(async() => [
             mainContract.connect(owner).setLiquidationIncentive(1e7),
             
@@ -200,6 +208,12 @@ describe('Interest component', () => {
         it('Should return proper utilization', async() => {
             expect(
                 await mainContract.getTokenUtilization(smplToken1.address)
+            ).to.be.equal(0);
+        });
+        
+        it('Should return proper utilization', async() => {
+            expect(
+                await mainContract.getTokenUtilization(smplToken4.address)
             ).to.be.equal(0);
         });
         
@@ -349,33 +363,13 @@ describe('Interest component', () => {
         // (0 + 250)
         
         // with token loan interest configured
-        describe('with borrowed assets', () => {
+        describe('with AAA borrowed', () => {
             beforeEach(async() => {
                 await executeInSingleBlock(async() => [
                     mainContract
                         .connect(alice)
                         .borrow(
                             smplToken1.address,
-                            ethers.utils.parseUnits('200', 18)
-                        ),
-                    mainContract
-                        .connect(alice)
-                        .borrow(
-                            smplToken2.address,
-                            ethers.utils.parseUnits('200', 18)
-                        ),
-                    mainContract
-                        .connect(carol)
-                        .borrow(
-                            smplToken2.address,
-                            ethers.utils.parseUnits('300', 18)
-                        ),
-                ]);
-                await executeInSingleBlock(async() => [
-                    mainContract
-                        .connect(alice)
-                        .borrow(
-                            smplToken3.address,
                             ethers.utils.parseUnits('200', 18)
                         ),
                 ]);
@@ -387,14 +381,6 @@ describe('Interest component', () => {
                 expect(
                     await mainContract.getTokenUtilization(smplToken1.address)
                 ).to.be.equal(12500000);
-                // 500 / 1000 = 50%
-                expect(
-                    await mainContract.getTokenUtilization(smplToken2.address)
-                ).to.be.equal(50000000);
-                // 200 / 250 = 80%
-                expect(
-                    await mainContract.getTokenUtilization(smplToken3.address)
-                ).to.be.equal(80000000);
             });
             
             it('Should return proper interest rate', async() => {
@@ -402,20 +388,12 @@ describe('Interest component', () => {
                 expect(
                     await mainContract.getTokenInterestRate(smplToken1.address)
                 ).to.be.equal(5000000);
-                // 0% + 20% + [150% * (25% / 75%)] = 70%
-                expect(
-                    await mainContract.getTokenInterestRate(smplToken2.address)
-                ).to.be.equal(70000000);
-                // 10% + 30% + [300% * (30% / 50%)] = 220%
-                expect(
-                    await mainContract.getTokenInterestRate(smplToken3.address)
-                ).to.be.equal(220000000);
             });
             
             
             // with token loan interest configured
             // with Alice deposit and borrow
-            describe('trigger interest applying on AAA', () => {
+            describe('trigger interest applying', () => {
                 beforeEach(async() => {
                     await executeInSingleBlock(async() => [
                         ...deposit(
@@ -423,7 +401,7 @@ describe('Interest component', () => {
                             smplToken1,
                             ethers.utils.parseUnits('100', 18)
                         )
-                    ], 31506);
+                    ], 31526);
                 });
                 
                 it('Should increase total debit', async() => {
@@ -469,10 +447,47 @@ describe('Interest component', () => {
                 });
             });
             
+        });
+        
+        
+        // with token loan interest configured
+        describe('with BBB borrowed', () => {
+            beforeEach(async() => {
+                await executeInSingleBlock(async() => [
+                    mainContract
+                        .connect(alice)
+                        .borrow(
+                            smplToken2.address,
+                            ethers.utils.parseUnits('200', 18)
+                        ),
+                    mainContract
+                        .connect(carol)
+                        .borrow(
+                            smplToken2.address,
+                            ethers.utils.parseUnits('300', 18)
+                        ),
+                ]);
+            });
+            
+            
+            it('Should return proper utilization', async() => {
+                // 500 / 1000 = 50%
+                expect(
+                    await mainContract.getTokenUtilization(smplToken2.address)
+                ).to.be.equal(50000000);
+            });
+            
+            it('Should return proper interest rate', async() => {
+                // 0% + 20% + [150% * (25% / 75%)] = 70%
+                expect(
+                    await mainContract.getTokenInterestRate(smplToken2.address)
+                ).to.be.equal(70000000);
+            });
+            
             
             // with token loan interest configured
             // with Alice deposit and borrow
-            describe('trigger interest applying on BBB', () => {
+            describe('trigger interest applying', () => {
                 beforeEach(async() => {
                     await executeInSingleBlock(async() => [
                         ...deposit(
@@ -480,7 +495,7 @@ describe('Interest component', () => {
                             smplToken2,
                             ethers.utils.parseUnits('100', 18)
                         )
-                    ], 31506);
+                    ], 31526);
                 });
                 
                 it('Should increase total debit', async() => {
@@ -532,11 +547,41 @@ describe('Interest component', () => {
                     ).to.be.equal(ethers.utils.parseUnits('500.14875', 18));
                 });
             });
+        });
+        
+        
+        // with token loan interest configured
+        describe('with CCC borrowed', () => {
+            beforeEach(async() => {
+                await executeInSingleBlock(async() => [
+                    mainContract
+                        .connect(alice)
+                        .borrow(
+                            smplToken3.address,
+                            ethers.utils.parseUnits('200', 18)
+                        ),
+                ]);
+            });
+            
+            
+            it('Should return proper utilization', async() => {
+                // 200 / 250 = 80%
+                expect(
+                    await mainContract.getTokenUtilization(smplToken3.address)
+                ).to.be.equal(80000000);
+            });
+            
+            it('Should return proper interest rate', async() => {
+                // 10% + 30% + [300% * (30% / 50%)] = 220%
+                expect(
+                    await mainContract.getTokenInterestRate(smplToken3.address)
+                ).to.be.equal(220000000);
+            });
             
             
             // with token loan interest configured
             // with Alice deposit and borrow
-            describe('trigger interest applying on CCC', () => {
+            describe('trigger interest applying', () => {
                 beforeEach(async() => {
                     await executeInSingleBlock(async() => [
                         ...deposit(
@@ -544,7 +589,7 @@ describe('Interest component', () => {
                             smplToken3,
                             ethers.utils.parseUnits('100', 18)
                         )
-                    ], 31516);
+                    ], 31526);
                 });
                 
                 it('Should increase total debit', async() => {

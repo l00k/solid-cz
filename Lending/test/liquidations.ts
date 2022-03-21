@@ -291,7 +291,7 @@ describe('Liquidations component', () => {
             await txExec(
                 mainContract
                     .connect(owner)
-                    .setLiquidationIncentive(1e5)
+                    .setLiquidationIncentive(1e7)
             );
         });
         

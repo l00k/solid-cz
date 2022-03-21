@@ -151,7 +151,7 @@ export async function executeInSingleBlock (
     if (txPromises) {
         for (const txPromise of txPromises) {
             const tx = await txPromise;
-            const result = await tx.wait();
+            const result = await tx.wait(1);
             
             expect(result.status).to.be.equal(1);
             txs.push(tx);
